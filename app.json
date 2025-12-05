@@ -13,9 +13,6 @@
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "Nous avons besoin de votre position pour vous localiser sur la carte."
       },
-      "config": {
-        "googleMapsApiKey": "${EXPO_PUBLIC_GOOGLE_MAPS_API_KEY}"
-      },
       "bundleIdentifier": "com.anonymous.transport"
     },
     "android": {
@@ -24,11 +21,6 @@
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
-      },
-      "config": {
-        "googleMaps": {
-          "apiKey": "${EXPO_PUBLIC_GOOGLE_MAPS_API_KEY}"
-        }
       },
       "permissions": [
         "android.permission.ACCESS_FINE_LOCATION",
@@ -61,11 +53,16 @@
       "expo-web-browser"
     ],
     "extra": {
-      "mapboxToken": "${EXPO_PUBLIC_MAPBOX_TOKEN}"
+      "mapboxToken": "${EXPO_PUBLIC_MAPBOX_TOKEN}",
+      "router": {},
+      "eas": {
+        "projectId": "3757d382-8a84-46f7-be59-7db8d6eb23f3"
+      }
     },
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "owner": "ticmiton"
   }
 }
