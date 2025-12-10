@@ -127,7 +127,7 @@ const styles = StyleSheet.create({
   card: { backgroundColor: Colors.white, borderRadius: 14, padding: 16, shadowColor: Colors.black, shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.08, shadowRadius: 2 },
   driverRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   avatar: { width: 56, height: 56, borderRadius: 28, backgroundColor: Colors.background },
-  title: { fontFamily: Fonts.unboundedBold, color: Colors.black, fontSize: 18 },
+  title: { fontFamily: Fonts.titilliumWebBold, color: Colors.black, fontSize: 18 },
   sub: { fontFamily: Fonts.titilliumWeb, color: Colors.gray, marginTop: 4 },
   etaPill: { backgroundColor: Colors.background, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12 },
   etaPillText: { fontFamily: Fonts.titilliumWebBold, color: Colors.black },

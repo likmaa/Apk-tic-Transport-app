@@ -147,7 +147,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   driverName: {
-    fontFamily: Fonts.unboundedBold,
+    fontFamily: Fonts.titilliumWebBold,
     fontSize: 22,
     color: Colors.black,
   },

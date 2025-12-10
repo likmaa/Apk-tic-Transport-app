@@ -464,7 +464,7 @@ const styles = StyleSheet.create({
     },
     name: {
         fontSize: 22,
-        fontFamily: "Unbounded-Bold",
+        fontFamily: "Titillium-Bold",
         color: Colors.primary,
         textAlign: "center",
     },
@@ -483,7 +483,7 @@ const styles = StyleSheet.create({
     },
     sectionTitle: {
         fontSize: 16,
-        fontFamily: "Unbounded-Bold",
+        fontFamily: "Titillium-Bold",
         color: Colors.black,
         paddingVertical: 18,
         paddingHorizontal: 20,

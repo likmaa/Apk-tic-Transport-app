@@ -14,6 +14,6 @@ export default function PromosScreen() {
 
 const styles = StyleSheet.create({
   container: {flex:1, justifyContent:'center', alignItems:'center', backgroundColor: Colors.white},
-  title: { fontSize: 22, fontFamily: "Unbounded_700Bold", color: Colors.primary },
+  title: { fontSize: 22, fontFamily: "Titillium-Bold", color: Colors.primary },
   desc: { fontSize: 16, fontFamily: "TitilliumWeb_400Regular", color: Colors.gray, marginTop: 8 }
 });

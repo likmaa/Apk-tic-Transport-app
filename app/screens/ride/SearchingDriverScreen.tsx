@@ -69,6 +69,6 @@ export default function SearchingDriverScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background, alignItems: 'center', justifyContent: 'center' },
-  title: { marginTop: 16, fontFamily: Fonts.unboundedBold, fontSize: 18, color: Colors.black },
+  title: { marginTop: 16, fontFamily: Fonts.titilliumWebBold, fontSize: 18, color: Colors.black },
   subtitle: { marginTop: 8, fontFamily: Fonts.titilliumWeb, fontSize: 14, color: Colors.gray },
 });

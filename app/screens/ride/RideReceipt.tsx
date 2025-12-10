@@ -78,7 +78,7 @@ export default function RideReceipt() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background, padding: 16 },
   card: { backgroundColor: Colors.white, borderRadius: 12, padding: 16, shadowColor: Colors.black, shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.08, shadowRadius: 2 },
-  title: { fontFamily: Fonts.unboundedBold, color: Colors.black, fontSize: 18, marginBottom: 10 },
+  title: { fontFamily: Fonts.titilliumWebBold, color: Colors.black, fontSize: 18, marginBottom: 10 },
   typeBadge: { alignSelf: 'flex-start', backgroundColor: Colors.background, color: Colors.black, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4, fontFamily: Fonts.titilliumWebBold, marginBottom: 8 },
   row: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
   label: { fontFamily: Fonts.titilliumWeb, color: Colors.gray },

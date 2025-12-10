@@ -334,7 +334,7 @@ const styles = StyleSheet.create({
         color: Colors.gray,
     },
     cardPrice: {
-        fontFamily: Fonts.unboundedBold,
+        fontFamily: Fonts.titilliumWebBold,
         fontSize: 16,
         color: Colors.black,
     },

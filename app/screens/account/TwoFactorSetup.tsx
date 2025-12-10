@@ -28,7 +28,7 @@ export default function TwoFactorSetup() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   content: { padding: 16 },
-  title: { fontFamily: Fonts.unboundedBold, fontSize: 18, color: Colors.black, marginBottom: 8 },
+  title: { fontFamily: Fonts.titilliumWebBold, fontSize: 18, color: Colors.black, marginBottom: 8 },
   paragraph: { fontFamily: Fonts.titilliumWeb, fontSize: 14, color: Colors.darkGray, lineHeight: 20, marginBottom: 10 },
   primaryBtn: { marginTop: 8, backgroundColor: Colors.primary, borderRadius: 10, paddingVertical: 12, alignItems: 'center' },
   primaryText: { color: Colors.white, fontFamily: Fonts.titilliumWebBold },

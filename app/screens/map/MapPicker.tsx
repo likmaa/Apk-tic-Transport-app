@@ -248,7 +248,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   sheetTitle: {
-    fontFamily: Fonts.unboundedBold,
+    fontFamily: Fonts.titilliumWebBold,
     fontSize: 17,
     color: Colors.black,
     textAlign: 'center',

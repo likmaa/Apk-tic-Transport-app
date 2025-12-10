@@ -28,6 +28,6 @@ export default function HomeWalletCard({ onPress, balance, currency = 'FCFA' }: 
 const styles = StyleSheet.create({
   walletCard: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: Colors.primary, borderRadius: 12, padding: 16, marginHorizontal: 20, marginBottom: 12, borderWidth: 1, borderColor: Colors.lightGray },
   walletLabel: { fontFamily: Fonts.titilliumWeb, fontSize: 13, color: Colors.white, marginBottom: 4 },
-  walletBalance: { fontFamily: Fonts.unboundedBold, fontSize: 20, color: Colors.white },
+  walletBalance: { fontFamily: Fonts.titilliumWebBold, fontSize: 20, color: Colors.white },
   addButton: { backgroundColor: Colors.primary, width: 42, height: 42, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
 });

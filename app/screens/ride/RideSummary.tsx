@@ -157,7 +157,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background, padding: 16 },
   mapBox: { height: 220, borderRadius: 14, overflow: 'hidden', marginBottom: 12, backgroundColor: Colors.lightGray },
   card: { backgroundColor: Colors.white, borderRadius: 14, padding: 16, shadowColor: Colors.black, shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.08, shadowRadius: 2 },
-  title: { fontFamily: Fonts.unboundedBold, color: Colors.black, fontSize: 20, marginBottom: 12 },
+  title: { fontFamily: Fonts.titilliumWebBold, color: Colors.black, fontSize: 20, marginBottom: 12 },
   typeBadge: { alignSelf: 'flex-start', backgroundColor: Colors.background, color: Colors.black, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4, fontFamily: Fonts.titilliumWebBold, marginBottom: 8 },
   // OD visuals
   odRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },

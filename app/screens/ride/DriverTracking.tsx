@@ -352,7 +352,7 @@ export default function DriverTracking() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   sheet: { position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: Colors.white, borderTopLeftRadius: 16, borderTopRightRadius: 16, paddingHorizontal: 16, paddingTop: 20, paddingBottom: 40 },
-  sheetTitle: { fontFamily: Fonts.unboundedBold, fontSize: 18, color: Colors.black },
+  sheetTitle: { fontFamily: Fonts.titilliumWebBold, fontSize: 18, color: Colors.black },
   sheetSub: { fontFamily: Fonts.titilliumWeb, color: Colors.gray, marginBottom: 12 },
   driverCard: { backgroundColor: Colors.background, borderRadius: 12, padding: 12, flexDirection: 'row', alignItems: 'center' },
   avatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: Colors.primary, alignItems: 'center', justifyContent: 'center', marginRight: 10 },

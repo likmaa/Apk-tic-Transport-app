@@ -140,20 +140,24 @@ export default function ConfirmRide() {
         <View style={{ width: 44 }} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {/* Carte de Trajet */}
         <View style={styles.card}>
           <View style={styles.locationRow}>
-            <View style={[styles.dot, { backgroundColor: Colors.primary }]} />
-            <View>
+            <View style={styles.locationDotContainer}>
+              <View style={[styles.dot, { backgroundColor: Colors.primary }]} />
+            </View>
+            <View style={styles.locationTextContainer}>
               <Text style={styles.locationLabel}>Départ</Text>
               <Text style={styles.locationAddress} numberOfLines={2}>{truncateWords(origin.address, 8)}</Text>
             </View>
           </View>
           <View style={styles.line} />
           <View style={styles.locationRow}>
-            <View style={[styles.dot, { backgroundColor: Colors.secondary }]} />
-            <View>
+            <View style={styles.locationDotContainer}>
+              <View style={[styles.dot, { backgroundColor: Colors.secondary }]} />
+            </View>
+            <View style={styles.locationTextContainer}>
               <Text style={styles.locationLabel}>Destination</Text>
               <Text style={styles.locationAddress} numberOfLines={2}>{truncateWords(destination.address, 8)}</Text>
             </View>
@@ -162,14 +166,19 @@ export default function ConfirmRide() {
 
         {/* Carte de Service */}
         <View style={styles.card}>
-          <View style={styles.optionRow}>
-            <View style={styles.optionIcon}>
-              <MaterialCommunityIcons name="car-clock" size={24} color={Colors.primary} />
+          <View style={styles.serviceHeader}>
+            <View style={styles.optionRow}>
+              <View style={styles.optionIcon}>
+                <MaterialCommunityIcons name="car-clock" size={24} color={Colors.primary} />
+              </View>
+              <View style={styles.optionTextContainer}>
+                <Text style={styles.optionTitle}>Standard</Text>
+                <Text style={styles.optionSubtitle}>Arrivée dans ~5 min</Text>
+              </View>
             </View>
-            <View style={styles.optionTextContainer}>
-              <Text style={styles.optionTitle}>Standard</Text>
-              <Text style={styles.optionSubtitle}>Arrivée dans ~5 min</Text>
-            </View>
+          </View>
+          <View style={styles.priceContainer}>
+            <Text style={styles.priceLabel}>Prix estimé</Text>
             <Text style={styles.priceText}>
               {priceEstimate ? `${priceEstimate.toLocaleString('fr-FR')} FCFA` : '...'}
             </Text>
@@ -178,7 +187,7 @@ export default function ConfirmRide() {
 
         {/* Carte de Paiement */}
         <View style={styles.card}>
-          <TouchableOpacity style={styles.optionRow} onPress={() => (navigation as any).navigate('screens/payment/PaymentOptions')}>
+          <TouchableOpacity style={styles.paymentRow} onPress={() => (navigation as any).navigate('screens/payment/PaymentOptions')}>
             <View style={styles.optionIcon}>
               <Ionicons name="card-outline" size={24} color={Colors.primary} />
             </View>
@@ -258,23 +267,29 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: Colors.background },
   loadingText: { marginTop: 10, fontFamily: Fonts.titilliumWeb, color: Colors.gray },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 10, paddingVertical: 40 },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 16, paddingBottom: 20 },
   backButton: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center' },
-  headerTitle: { fontFamily: Fonts.unboundedBold, fontSize: 20, color: Colors.black },
-  scrollContent: { padding: 20, paddingBottom: 120 }, // Espace pour le footer
-  card: { backgroundColor: 'white', borderRadius: 16, padding: 10, marginBottom: 50, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 3 },
-  locationRow: { flexDirection: 'row', alignItems: 'center' },
-  dot: { width: 12, height: 12, borderRadius: 6, marginRight: 16 },
-  line: { height: 25, width: 2, backgroundColor: Colors.lightGray, marginLeft: 5, marginVertical: 8 },
-  locationLabel: { fontFamily: Fonts.titilliumWeb, fontSize: 13, color: Colors.gray, marginBottom: 2 },
-  locationAddress: { fontFamily: Fonts.titilliumWebSemiBold, fontSize: 16, color: Colors.black },
+  headerTitle: { fontFamily: Fonts.titilliumWebBold, fontSize: 20, color: Colors.black },
+  scrollContent: { padding: 20, paddingBottom: 140 },
+  card: { backgroundColor: 'white', borderRadius: 16, padding: 20, marginBottom: 16, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 3 },
+  locationRow: { flexDirection: 'row', alignItems: 'flex-start', minHeight: 50 },
+  locationDotContainer: { width: 28, alignItems: 'center', paddingTop: 2 },
+  dot: { width: 12, height: 12, borderRadius: 6 },
+  line: { height: 30, width: 2, backgroundColor: Colors.lightGray, marginLeft: 13, marginVertical: 6 },
+  locationTextContainer: { flex: 1, paddingRight: 10 },
+  locationLabel: { fontFamily: Fonts.titilliumWeb, fontSize: 13, color: Colors.gray, marginBottom: 4 },
+  locationAddress: { fontFamily: Fonts.titilliumWebSemiBold, fontSize: 16, color: Colors.black, lineHeight: 22 },
+  serviceHeader: { marginBottom: 16 },
   optionRow: { flexDirection: 'row', alignItems: 'center' },
   optionIcon: { width: 45, height: 45, borderRadius: 22.5, backgroundColor: Colors.background, justifyContent: 'center', alignItems: 'center', marginRight: 16 },
   optionTextContainer: { flex: 1 },
   optionTitle: { fontFamily: Fonts.titilliumWebBold, fontSize: 16, color: Colors.black },
   optionSubtitle: { fontFamily: Fonts.titilliumWeb, fontSize: 14, color: Colors.gray, marginTop: 2 },
-  priceText: { fontFamily: Fonts.unboundedBold, fontSize: 18, color: Colors.black },
-  footer: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: 'white', padding: 20, paddingTop: 10, borderTopWidth: 1, borderTopColor: Colors.lightGray, marginBottom: 40 },
-  confirmButton: { backgroundColor: Colors.primary, paddingVertical: 16, borderRadius: 12, alignItems: 'center' },
+  priceContainer: { borderTopWidth: 1, borderTopColor: Colors.lightGray, paddingTop: 16, marginTop: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  priceLabel: { fontFamily: Fonts.titilliumWeb, fontSize: 14, color: Colors.gray },
+  priceText: { fontFamily: Fonts.titilliumWebBold, fontSize: 20, color: Colors.primary },
+  paymentRow: { flexDirection: 'row', alignItems: 'center' },
+  footer: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: 'white', paddingHorizontal: 20, paddingTop: 16, paddingBottom: 20, borderTopWidth: 1, borderTopColor: Colors.lightGray, shadowColor: "#000", shadowOffset: { width: 0, height: -2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 5 },
+  confirmButton: { backgroundColor: Colors.primary, paddingVertical: 16, borderRadius: 12, alignItems: 'center', justifyContent: 'center', minHeight: 56 },
   confirmButtonText: { color: 'white', fontFamily: Fonts.titilliumWebBold, fontSize: 18 },
 });

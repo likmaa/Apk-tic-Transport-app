@@ -28,7 +28,7 @@ const styles = StyleSheet.create({
     padding: 24,
   },
   title: {
-    fontFamily: Fonts.unboundedBold,
+    fontFamily: Fonts.titilliumWebBold,
     fontSize: 20,
     color: Colors.black,
     textAlign: 'center',

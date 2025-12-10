@@ -204,7 +204,7 @@ const styles = StyleSheet.create({
     borderBottomColor: Colors.lightGray,
   },
   backButton: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center' },
-  headerTitle: { fontFamily: Fonts.unboundedBold, fontSize: 18, color: Colors.black },
+  headerTitle: { fontFamily: Fonts.titilliumWebBold, fontSize: 18, color: Colors.black },
   filterButton: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center' },
   filterContainer: { paddingVertical: 12, backgroundColor: 'white' },
   filterScroll: { paddingHorizontal: 16, gap: 10 },
@@ -225,7 +225,7 @@ const styles = StyleSheet.create({
   // Styles du Modal
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' },
   modalContent: { backgroundColor: 'white', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, paddingBottom: 40 },
-  modalTitle: { fontFamily: Fonts.unboundedBold, fontSize: 20, marginBottom: 20, textAlign: 'center' },
+  modalTitle: { fontFamily: Fonts.titilliumWebBold, fontSize: 20, marginBottom: 20, textAlign: 'center' },
   modalOption: { paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: Colors.lightGray },
   modalOptionText: { fontFamily: Fonts.titilliumWebSemiBold, fontSize: 16 },
 });

@@ -402,7 +402,7 @@ const styles = StyleSheet.create({
     padding: 4,
   },
   headerTitle: {
-    fontFamily: Fonts.unboundedBold,
+    fontFamily: Fonts.titilliumWebBold,
     fontSize: 20,
     color: Colors.black,
     marginLeft: 16,

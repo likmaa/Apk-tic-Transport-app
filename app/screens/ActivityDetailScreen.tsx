@@ -260,7 +260,7 @@ const styles = StyleSheet.create({
     color: Colors.gray,
   },
   summaryPrice: {
-    fontFamily: Fonts.unboundedBold,
+    fontFamily: Fonts.titilliumWebBold,
     fontSize: 40,
     color: Colors.black,
     marginVertical: 8,

@@ -181,7 +181,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   headerTitle: {
-    fontFamily: Fonts.unboundedBold,
+    fontFamily: Fonts.titilliumWebBold,
     fontSize: 18,
     color: Colors.black,
   },
@@ -201,7 +201,7 @@ const styles = StyleSheet.create({
     color: Colors.white + 'A0', // Blanc avec opacité
   },
   balanceAmount: {
-    fontFamily: Fonts.unboundedBold,
+    fontFamily: Fonts.titilliumWebBold,
     fontSize: 36,
     color: Colors.white,
     marginTop: 4,
@@ -221,7 +221,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   amountInput: {
-    fontFamily: Fonts.unboundedBold,
+    fontFamily: Fonts.titilliumWebBold,
     fontSize: 40,
     color: Colors.black,
     minWidth: 150,

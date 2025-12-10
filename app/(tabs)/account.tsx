@@ -16,7 +16,7 @@ export default function AccountTab() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background, padding: 16 },
-  title: { fontFamily: Fonts.unboundedBold, color: Colors.black, fontSize: 20, marginBottom: 12 },
+  title: { fontFamily: Fonts.titilliumWebBold, color: Colors.black, fontSize: 20, marginBottom: 12 },
   card: { backgroundColor: Colors.white, borderRadius: 12, padding: 16 },
   value: { fontFamily: Fonts.titilliumWeb, color: Colors.gray },
 });

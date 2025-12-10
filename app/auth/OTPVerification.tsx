@@ -247,7 +247,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 28,
-    fontFamily: "Unbounded-Bold",
+    fontFamily: "Titillium-Bold",
     color: Colors.primary,
     textAlign: "center",
     marginBottom: 16,

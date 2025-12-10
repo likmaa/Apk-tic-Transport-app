@@ -202,7 +202,7 @@ export default function VehicleOptions() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   headerCard: { backgroundColor: Colors.white, margin: 16, padding: 14, borderRadius: 14, shadowColor: Colors.black, shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.08, shadowRadius: 2 },
-  title: { fontFamily: Fonts.unboundedBold, fontSize: 16, color: Colors.black, marginBottom: 10 },
+  title: { fontFamily: Fonts.titilliumWebBold, fontSize: 16, color: Colors.black, marginBottom: 10 },
   odRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   dotOrigin: { width: 12, height: 12, borderRadius: 6, backgroundColor: '#2e7d32' },
   dotDest: { width: 12, height: 12, borderRadius: 6, backgroundColor: '#c62828' },

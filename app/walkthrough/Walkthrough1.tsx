@@ -99,7 +99,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 26,
-    fontFamily: 'Unbounded-Bold',
+    fontFamily: 'Titillium-Bold',
     color: Colors.primary,
     textAlign: "center",
     marginBottom: 12,
@@ -142,7 +142,7 @@ const styles = StyleSheet.create({
   },
   nextText: {
     color: Colors.white,
-    fontFamily: "Unbounded-Bold",
+    fontFamily: "Titillium-Bold",
     fontSize: 16,
     textAlign: "center",
   },
