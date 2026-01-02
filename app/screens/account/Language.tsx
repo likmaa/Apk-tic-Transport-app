@@ -5,8 +5,6 @@ import { Fonts } from '../../font';
 
 const languages = [
   { code: 'fr', label: 'Français' },
-  { code: 'en', label: 'English' },
-  { code: 'pt', label: 'Português' },
 ];
 
 export default function Language() {

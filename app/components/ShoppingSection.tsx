@@ -9,9 +9,12 @@ import { useLines } from '../hooks/useLines';
 import { estimateLinePrice } from '../api/lines';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+import { useAuth } from '../providers/AuthProvider';
+
 export default function ShoppingSection() {
   const router = useRouter();
-  const { origin, destination, setOrigin, setDestination } = useLocationStore();
+  const { token } = useAuth();
+  const { origin, destination, setOrigin, setDestination, requestUserLocation } = useLocationStore();
   const [scheduleDate, setScheduleDate] = useState(new Date());
   const [scheduleTime, setScheduleTime] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -72,16 +75,8 @@ export default function ShoppingSection() {
   };
 
   const handleUseMyLocation = async () => {
-    try {
-      const { status } = await (await import('expo-location')).requestForegroundPermissionsAsync();
-      if (status !== 'granted') return;
-      const loc = await (await import('expo-location')).getCurrentPositionAsync({});
-      if (mode === 'origin') setOrigin({ address: 'Ma position', lat: loc.coords.latitude, lon: loc.coords.longitude });
-      else setDestination({ address: 'Ma position', lat: loc.coords.latitude, lon: loc.coords.longitude });
-      setShowEmbarkModal(false);
-    } catch (err) {
-      console.log('Erreur localisation:', err);
-    }
+    const place = await requestUserLocation(mode); // mode is 'origin' or 'destination'
+    if (place) setShowEmbarkModal(false);
   };
 
   return (
@@ -161,7 +156,6 @@ export default function ShoppingSection() {
             }
 
             try {
-              const token = await AsyncStorage.getItem('authToken');
               if (!token) return;
 
               const res = await fetch(`${API_URL}/trips/request`, {

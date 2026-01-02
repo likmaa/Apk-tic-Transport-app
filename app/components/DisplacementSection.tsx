@@ -7,9 +7,12 @@ import { EMBARKATION_POINTS } from '../data/embarkationPoints';
 import { Colors, Fonts } from '../theme';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+import { useAuth } from '../providers/AuthProvider';
+
 export default function DisplacementSection() {
   const router = useRouter();
-  const { origin, setOrigin, destination } = useLocationStore();
+  const { origin, setOrigin, destination, requestUserLocation } = useLocationStore();
+  const { token } = useAuth();
   const [showEmbarkModal, setShowEmbarkModal] = useState(false);
   const [scheduleDate, setScheduleDate] = useState<Date>(new Date());
   const [scheduleTime, setScheduleTime] = useState<Date>(new Date());
@@ -46,7 +49,6 @@ export default function DisplacementSection() {
 
     (async () => {
       try {
-        const token = await AsyncStorage.getItem('authToken');
         if (!token) return;
 
         const res = await fetch(`${api}/passenger/addresses`, {
@@ -80,15 +82,8 @@ export default function DisplacementSection() {
   };
 
   const handleUseMyLocation = async () => {
-    try {
-      const { status } = await (await import('expo-location')).requestForegroundPermissionsAsync();
-      if (status !== 'granted') { setShowEmbarkModal(false); return; }
-      const loc = await (await import('expo-location')).getCurrentPositionAsync({});
-      setOrigin({ address: 'Ma position', lat: loc.coords.latitude, lon: loc.coords.longitude });
-      setShowEmbarkModal(false);
-    } catch {
-      setShowEmbarkModal(false);
-    }
+    setShowEmbarkModal(false);
+    await requestUserLocation();
   };
 
   const API_URL = process.env.EXPO_PUBLIC_API_URL;
@@ -175,7 +170,7 @@ export default function DisplacementSection() {
 
             try {
               setCreating(true);
-              const token = await AsyncStorage.getItem('authToken');
+              // user is guaranteed to be logged in by AuthProvider
               if (!token) {
                 Alert.alert('Erreur', 'Utilisateur non authentifié.');
                 return;
@@ -203,7 +198,7 @@ export default function DisplacementSection() {
                     if (typeof data.price === 'number') price = data.price;
                   }
                 }
-              } catch {}
+              } catch { }
 
               // 2) Création de la course côté backend
               const res = await fetch(`${API_URL}/trips/create`, {

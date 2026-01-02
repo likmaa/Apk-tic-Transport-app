@@ -3,7 +3,25 @@ import React, { useEffect, useState } from 'react';
 import { SafeAreaView, StyleSheet, Text, View, TouchableOpacity, Alert } from 'react-native';
 import { useNavigation } from 'expo-router';
 import { useRoute, type RouteProp } from '@react-navigation/native';
-import MapView from 'react-native-maps';
+import { MapPlaceholder } from '../../components/MapPlaceholder';
+
+// Tentative d'importation sécurisée de Mapbox
+let Mapbox: any = null;
+let MapView: any = View;
+let Camera: any = View;
+
+try {
+  const MB = require('@rnmapbox/maps');
+  Mapbox = MB.default || MB;
+  MapView = MB.MapView;
+  Camera = MB.Camera;
+
+  if (Mapbox && typeof Mapbox.setAccessToken === 'function') {
+    Mapbox.setAccessToken(process.env.EXPO_PUBLIC_MAPBOX_TOKEN || '');
+  }
+} catch (e) {
+  Mapbox = null;
+}
 import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming, Easing } from 'react-native-reanimated';
 import { Colors } from '../../theme';
 import { Fonts } from '../../font';
@@ -11,6 +29,10 @@ import { useLocationStore } from '../../providers/LocationProvider';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getPusherClient, unsubscribeChannel } from '../../services/pusherClient';
+
+if (Mapbox) {
+  Mapbox.setAccessToken(process.env.EXPO_PUBLIC_MAPBOX_TOKEN || '');
+}
 
 type RootParams = {
   'screens/ride/SearchingDriver': {
@@ -74,7 +96,9 @@ export default function SearchingDriver() {
         const riderId = parsed?.id;
         if (!riderId) return;
 
-        const client = await getPusherClient();
+        const token = await AsyncStorage.getItem('authToken');
+        if (!token) return;
+        const client = await getPusherClient(token);
         channel = client.subscribe(`private-rider.${riderId}`);
         channel.bind('ride.accepted', (payload: any) => {
           if (cancelled) return;
@@ -136,17 +160,16 @@ export default function SearchingDriver() {
           }
 
           if (res.status !== 204) {
-            Alert.alert('Erreur', 'Impossible de trouver un chauffeur. Veuillez réessayer.');
-            navigation.goBack();
-            return;
+            // Retry or just continue
+            // Alert.alert('Erreur', 'Impossible de trouver un chauffeur. Veuillez réessayer.');
+            // navigation.goBack();
+            // return;
           }
         } catch (error: any) {
           if (error?.name === 'AbortError') {
             return;
           }
-          if (!cancelled) {
-            Alert.alert('Connexion perdue', 'Nouvelle tentative...');
-          }
+          // Ignore connection lost, loop will retry
         }
       }
     };
@@ -164,19 +187,26 @@ export default function SearchingDriver() {
 
       {/* Carte */}
       {origin && (
-        <MapView
-          style={StyleSheet.absoluteFill}
-          provider="google"
-          initialRegion={{
-            latitude: origin.lat,
-            longitude: origin.lon,
-            latitudeDelta: 0.01,
-            longitudeDelta: 0.01,
-          }}
-          userInterfaceStyle="dark"
-          scrollEnabled={false}
-          zoomEnabled={false}
-        />
+        Mapbox ? (
+          <MapView
+            style={StyleSheet.absoluteFill}
+            scrollEnabled={false}
+            attributionEnabled={false}
+            logoEnabled={false}
+            pitchEnabled={false}
+            rotateEnabled={false}
+            zoomEnabled={false}
+          >
+            <Camera
+              defaultSettings={{
+                centerCoordinate: [origin.lon, origin.lat],
+                zoomLevel: 14
+              }}
+            />
+          </MapView>
+        ) : (
+          <MapPlaceholder style={StyleSheet.absoluteFill} />
+        )
       )}
 
       {/* Overlay sombre + blur visuel */}

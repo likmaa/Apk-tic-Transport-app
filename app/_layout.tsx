@@ -1,7 +1,9 @@
 // app/_layout.tsx
 import React from "react";
 import { Stack } from "expo-router";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import FontProvider from "../providers/FontProvider"; // ajuste le chemin si besoin
+import { AuthProvider } from "./providers/AuthProvider";
 import { LocationProvider } from "./providers/LocationProvider";
 import { PaymentProvider } from "./providers/PaymentProvider";
 import { ServiceProvider } from "./providers/ServiceProvider";
@@ -75,61 +77,66 @@ declare global {
 
 export default function RootLayout() {
   return (
-    <FontProvider>
-      <ServiceProvider>
-      <PaymentProvider>
-      <LocationProvider>
-      <Stack
-        initialRouteName="Splash"
-        screenOptions={{
-          headerShown: false,
-          animation: "fade_from_bottom",
-        }}
-      >
-        <Stack.Screen name="Splash" />
-        <Stack.Screen name="walkthrough/Walkthrough1" />
-        <Stack.Screen name="walkthrough/Walkthrough2" />
-        <Stack.Screen name="walkthrough/Walkthrough3" />
-        <Stack.Screen name="auth/LoginPhone" />
-        <Stack.Screen name="auth/OTPVerification" />
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        {/* Route name must match the file path under app/ */}
-        <Stack.Screen
-          name="screens/ActivityDetailScreen"
-          options={{
-            headerShown: true,
-            title: "Détail de l’activité",
-          }}
-        />
-        <Stack.Screen
-          name="screens/Notifications"
-          options={{
-            headerShown: true,
-            title: "Notifications",
-          }}
-        />
-        <Stack.Screen name="screens/account/EditProfile" options={{ headerShown: true, title: "Modifier le profil" }} />
-        <Stack.Screen name="screens/account/Addresses" options={{ headerShown: true, title: "Adresses" }} />
-        <Stack.Screen name="screens/account/AddressForm" options={{ headerShown: true, title: "Ajouter / Modifier l’adresse" }} />
-        <Stack.Screen name="screens/account/ChangePassword" options={{ headerShown: true, title: "Changer le mot de passe" }} />
-        <Stack.Screen name="screens/account/Language" options={{ headerShown: true, title: "Langue" }} />
-        <Stack.Screen name="screens/account/TwoFactorSetup" options={{ headerShown: true, title: "Vérification en 2 étapes" }} />
-        <Stack.Screen name="screens/account/NotificationPreferences" options={{ headerShown: true, title: "Préférences de notification" }} />
-        <Stack.Screen name="screens/wallet/AddFunds" options={{ headerShown: true, title: "Ajouter des fonds" }} />
-        <Stack.Screen name="screens/wallet/Withdraw" options={{ headerShown: true, title: "Retirer" }} />
-        <Stack.Screen name="screens/wallet/Transactions" options={{ headerShown: true, title: "Historique" }} />
-        <Stack.Screen name="screens/map/PickLocation" options={{ headerShown: true, title: "Choisir une adresse" }} />
-        <Stack.Screen name="screens/delivery/PackageDetails" options={{ headerShown: true, title: "Détails du colis" }} />
-        <Stack.Screen name="screens/ride/RideSummary" options={{ headerShown: true, title: "Résumé de course" }} />
-        <Stack.Screen name="screens/ride/SearchingDriver" options={{ headerShown: true, title: "Recherche de chauffeur" }} />
-        <Stack.Screen name="screens/ride/OngoingRide" options={{ headerShown: true, title: "Course en cours" }} />
-        <Stack.Screen name="screens/ride/RideReceipt" options={{ headerShown: true, title: "Reçu" }} />
-        <Stack.Screen name="screens/ride/History" options={{ headerShown: true, title: "Historique des courses" }} />
-        <Stack.Screen name="screens/ride/ContactDriver" options={{ headerShown: true, title: "Contacter le chauffeur" }} />
-      </Stack>
-      </LocationProvider>
-      </PaymentProvider>
-      </ServiceProvider>
-    </FontProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <FontProvider>
+        <AuthProvider>
+          <ServiceProvider>
+            <PaymentProvider>
+              <LocationProvider>
+                <Stack
+                  initialRouteName="Splash"
+                  screenOptions={{
+                    headerShown: false,
+                    animation: "fade_from_bottom",
+                  }}
+                >
+                  <Stack.Screen name="Splash" />
+                  <Stack.Screen name="walkthrough/Walkthrough1" />
+                  <Stack.Screen name="walkthrough/Walkthrough2" />
+                  <Stack.Screen name="walkthrough/Walkthrough3" />
+                  <Stack.Screen name="auth/LoginPhone" />
+                  <Stack.Screen name="auth/OTPVerification" />
+                  <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+                  {/* Route name must match the file path under app/ */}
+                  <Stack.Screen
+                    name="screens/ActivityDetailScreen"
+                    options={{
+                      headerShown: true,
+                      title: "Détail de l’activité",
+                    }}
+                  />
+                  <Stack.Screen
+                    name="screens/Notifications"
+                    options={{
+                      headerShown: true,
+                      title: "Notifications",
+                    }}
+                  />
+                  <Stack.Screen name="screens/account/EditProfile" options={{ headerShown: true, title: "Modifier le profil" }} />
+                  <Stack.Screen name="screens/account/Addresses" options={{ headerShown: true, title: "Adresses" }} />
+                  <Stack.Screen name="screens/account/AddressForm" options={{ headerShown: true, title: "Ajouter / Modifier l’adresse" }} />
+                  <Stack.Screen name="screens/account/ChangePassword" options={{ headerShown: true, title: "Changer le mot de passe" }} />
+                  <Stack.Screen name="screens/account/Language" options={{ headerShown: true, title: "Langue" }} />
+                  <Stack.Screen name="screens/account/TwoFactorSetup" options={{ headerShown: true, title: "Vérification en 2 étapes" }} />
+                  <Stack.Screen name="screens/account/NotificationPreferences" options={{ headerShown: true, title: "Préférences de notification" }} />
+                  <Stack.Screen name="screens/wallet/AddFunds" options={{ headerShown: true, title: "Ajouter des fonds" }} />
+                  <Stack.Screen name="screens/wallet/Withdraw" options={{ headerShown: true, title: "Retirer" }} />
+                  <Stack.Screen name="screens/wallet/Transactions" options={{ headerShown: true, title: "Historique" }} />
+                  <Stack.Screen name="screens/map/PickLocation" options={{ headerShown: true, title: "Choisir une adresse" }} />
+                  <Stack.Screen name="screens/delivery/PackageDetails" options={{ headerShown: true, title: "Détails du colis" }} />
+                  <Stack.Screen name="screens/payment/PaymentOptions" options={{ headerShown: true, title: "Paiement" }} />
+                  <Stack.Screen name="screens/ride/RideSummary" options={{ headerShown: false }} />
+                  <Stack.Screen name="screens/ride/SearchingDriver" options={{ headerShown: false }} />
+                  <Stack.Screen name="screens/ride/OngoingRide" options={{ headerShown: false }} />
+                  <Stack.Screen name="screens/ride/RideReceipt" options={{ headerShown: false }} />
+                  <Stack.Screen name="screens/ride/History" options={{ headerShown: true, title: "Historique des courses" }} />
+                  <Stack.Screen name="screens/ride/ContactDriver" options={{ headerShown: true, title: "Contacter le chauffeur" }} />
+                </Stack>
+              </LocationProvider>
+            </PaymentProvider>
+          </ServiceProvider>
+        </AuthProvider>
+      </FontProvider>
+    </GestureHandlerRootView>
   );
 }

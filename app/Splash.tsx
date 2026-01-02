@@ -1,59 +1,66 @@
 import React, { useEffect } from 'react';
-import { View, StyleSheet, Image, ActivityIndicator, SafeAreaView } from 'react-native';
+import { View, StyleSheet, Image, ActivityIndicator, SafeAreaView, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Colors } from './theme';
-
-// Optional AsyncStorage import (safe like in providers)
-let AsyncStorage: any;
-try { AsyncStorage = require('@react-native-async-storage/async-storage').default; } catch {}
+import { useAuth } from './providers/AuthProvider';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
 export default function Splash() {
   const router = useRouter();
+  const { signOut, token: contextToken } = useAuth(); // Access auth context
 
   useEffect(() => {
     let cancelled = false;
 
     (async () => {
       try {
-        // 1) Si un authToken valide existe (utilisateur déjà en base / connecté), on va directement sur l'app
-        if (AsyncStorage && API_URL) {
-          const token = await AsyncStorage.getItem('authToken');
-          if (token) {
-            try {
-              const res = await fetch(`${API_URL}/auth/me`, {
-                headers: {
-                  Accept: 'application/json',
-                  Authorization: `Bearer ${token}`,
-                },
-              });
-              if (res.ok) {
-                const id = setTimeout(() => {
-                  if (!cancelled) router.replace('/' as any);
-                }, 800);
-                return () => clearTimeout(id);
+        // 1) Vérifier le token
+        const token = await AsyncStorage.getItem('authToken');
+
+        if (token && API_URL) {
+          try {
+            const res = await fetch(`${API_URL}/auth/me`, {
+              headers: {
+                Accept: 'application/json',
+                Authorization: `Bearer ${token}`,
+              },
+            });
+
+            if (res.ok) {
+              // Token valide, on va à l'accueil
+              if (!cancelled) {
+                // Petit délai pour l'UX
+                setTimeout(() => router.replace('/'), 800);
               }
-            } catch {
-              // on ignore et on retombe sur la logique walkthrough
+              return;
+            } else {
+              // Token invalide ou expiré
+              await signOut(); // Nettoyer le contexte
             }
+          } catch (e) {
+            // Erreur réseau ou autre, on continue s'il n'y a pas de réponse auth
+            // Optionnel: si pas de réseau, peut-être laisser passer si on veut un mode offline?
+            // Pour l'instant on assume qu'on doit re-login si doute
           }
         }
 
-        // 2) Sinon, on garde la logique walkthrough basée sur has_seen_walkthrough
-        const seen = AsyncStorage ? await AsyncStorage.getItem('has_seen_walkthrough') : null;
-        const target = seen ? '/' : '/walkthrough/Walkthrough1';
-        const id = setTimeout(() => {
-          if (!cancelled) router.replace(target as any);
-        }, 1000);
-        return () => clearTimeout(id);
-      } catch {
-        router.replace('/');
+        // 2) Logique Walkthrough
+        const seen = await AsyncStorage.getItem('has_seen_walkthrough');
+        const target = seen ? '/auth/LoginPhone' : '/walkthrough/Walkthrough1';
+        // Note: Si seen=true mais pas de token, on va au Login, pas à Home ('/') qui est protégé
+
+        if (!cancelled) {
+          setTimeout(() => router.replace(target as any), 1000);
+        }
+      } catch (e) {
+        if (!cancelled) router.replace('/auth/LoginPhone');
       }
     })();
 
     return () => { cancelled = true; };
-  }, [router]);
+  }, []);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -88,4 +95,3 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
   },
 });
-

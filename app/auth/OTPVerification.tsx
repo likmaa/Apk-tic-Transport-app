@@ -1,17 +1,20 @@
 import React, { useRef, useState, useEffect } from "react";
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, Alert } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Colors } from "../theme";
+import { useAuth } from "../providers/AuthProvider";
 
 export default function OTPVerification() {
   const { phone, otp_key } = useLocalSearchParams();
   const router = useRouter();
+  const { signIn } = useAuth();
+
   const [otp, setOtp] = useState(["", "", "", "", "", ""]);
   const inputs = useRef<(TextInput | null)[]>([]);
   const [focusedIndex, setFocusedIndex] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
   const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
   // Timer (30s)
@@ -28,6 +31,22 @@ export default function OTPVerification() {
   }, [timeLeft]);
 
   const handleChange = (text: string, index: number) => {
+    // Paste logic (if text is > 1 char)
+    if (text.length > 1) {
+      const sanitized = text.replace(/[^0-9]/g, '');
+      const newOtp = [...otp];
+      for (let i = 0; i < Math.min(sanitized.length, 6 - index); i++) {
+        newOtp[index + i] = sanitized[i];
+      }
+      setOtp(newOtp);
+      // Focus the next empty field or the last one
+      const nextIndex = Math.min(index + sanitized.length, 5);
+      if (nextIndex < 6) {
+        inputs.current[nextIndex]?.focus();
+      }
+      return;
+    }
+
     if (/^[0-9]$/.test(text)) {
       const newOtp = [...otp];
       newOtp[index] = text;
@@ -37,6 +56,8 @@ export default function OTPVerification() {
       }
     } else if (text === "") {
       const newOtp = [...otp];
+      // If we are deleting and the current box is empty, don't do anything (handled by onKeyPress)
+      // but if it has a value, clear it.
       newOtp[index] = "";
       setOtp(newOtp);
     }
@@ -90,67 +111,62 @@ export default function OTPVerification() {
         const msg = json?.message || "Vérification OTP échouée";
         setError(msg);
         Alert.alert("Erreur", msg);
+        setLoading(false);
         return;
       }
 
-      // On s'attend à recevoir { status, message, token, user }
       if (!json?.token) {
         const msg = json?.message || "Token manquant dans la réponse";
         setError(msg);
         Alert.alert("Erreur", msg);
+        setLoading(false);
         return;
       }
 
-      try {
-        await AsyncStorage.setItem("authToken", json.token);
-        if (json.user) {
-          await AsyncStorage.setItem("authUser", JSON.stringify(json.user));
+      // Verify user role
+      const token = json.token as string;
+      const resMe = await fetch(`${API_URL}/auth/me`, {
+        headers: {
+          Accept: "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (resMe.ok) {
+        const user = await resMe.json();
+        if (user?.role === "driver") {
+          Alert.alert(
+            "Compte chauffeur",
+            "Ce compte est un compte chauffeur. Veuillez vous connecter avec l'application chauffeur."
+          );
+          setLoading(false);
+          return;
         }
 
-        // Vérifier le rôle de l'utilisateur côté backend pour bloquer les comptes chauffeur
-        const token = json.token as string;
-        const resMe = await fetch(`${API_URL}/auth/me`, {
-          headers: {
-            Accept: "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-        });
-
-        if (resMe.ok) {
-          const user = await resMe.json();
-
-          if (user?.role === "driver") {
-            // Bloquer l'accès pour les comptes chauffeur dans l'app passager
-            await AsyncStorage.removeItem("authToken");
-            await AsyncStorage.removeItem("authUser");
-            Alert.alert(
-              "Compte chauffeur",
-              "Ce compte est un compte chauffeur. Veuillez vous connecter avec l'application chauffeur."
-            );
-            return;
-          }
-        }
-
-        // Rôle autorisé (ou rôle non renvoyé) → on entre dans l'app
-        router.push({ pathname: "/", params: { phone } });
-
-      } catch (storageError: any) {
-        console.warn("Erreur stockage token / vérification rôle", storageError);
+        // Success: Sign in via provider
+        await signIn(token, user || json.user);
+        // Navigation is handled by AuthProvider's useEffect or we can force it
+        // router.replace('/');
+      } else {
+        // Fallback: trust the initial user object if /me failed but token is valid
+        await signIn(token, json.user);
       }
+
     } catch (e: any) {
       console.warn("Erreur verifyOTP", e);
       const msg = e?.message || "Erreur réseau lors de la vérification";
       setError(msg);
       Alert.alert("Erreur", msg);
     } finally {
-      setLoading(false);
+      // If we are signed in, the component might unmount due to navigation, 
+      // but if we are here (error or logic end), stop loading.
+      if (loading) setLoading(false);
     }
   };
 
   const resendCode = async () => {
     if (!canResend || loading) return;
     setError(null);
-    // Bypass backend resend: just reset UI timer and fields
     setOtp(["", "", "", "", "", ""]);
     setTimeLeft(30);
     setCanResend(false);
@@ -159,15 +175,12 @@ export default function OTPVerification() {
 
   return (
     <View style={styles.container}>
-      {/* Bouton Retour */}
       <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
         <Text style={styles.backText}> Retour</Text>
       </TouchableOpacity>
 
-      {/* Titre */}
       <Text style={styles.title}>Vérification OTP</Text>
 
-      {/* Texte descriptif */}
       <Text style={styles.desc}>
         Un code de 6 chiffres a été envoyé à {phone}. Entrez-le ci-dessous.
       </Text>
@@ -176,20 +189,21 @@ export default function OTPVerification() {
         <Text style={{ color: 'red', marginBottom: 8 }}>{error}</Text>
       ) : null}
 
-      {/* Les 6 cases OTP */}
       <View style={styles.otpContainer}>
         {otp.map((digit, index) => (
           <TextInput
             key={index}
-            ref={(ref) => {
-              inputs.current[index] = ref;
-            }}
+            ref={(ref) => { inputs.current[index] = ref; }}
             style={[
               styles.otpInput,
               focusedIndex === index && styles.otpInputFocused,
             ]}
             keyboardType="numeric"
-            maxLength={1}
+            // iOS
+            textContentType={index === 0 ? "oneTimeCode" : "none"}
+            // Android
+            autoComplete={index === 0 ? "sms-otp" : undefined}
+            maxLength={index === 0 ? 6 : 1} // Allow paste on first field
             value={digit}
             onChangeText={(text) => handleChange(text, index)}
             onKeyPress={(e) => handleKeyPress(e, index)}
@@ -202,12 +216,10 @@ export default function OTPVerification() {
         ))}
       </View>
 
-      {/* Bouton Vérifier */}
       <TouchableOpacity style={styles.button} onPress={verifyOTP} disabled={loading}>
         <Text style={styles.buttonText}>{loading ? 'Vérification...' : 'Vérifier le code'}</Text>
       </TouchableOpacity>
 
-      {/* Timer ou bouton Renvoyer */}
       {canResend ? (
         <TouchableOpacity onPress={resendCode} disabled={loading}>
           <Text style={styles.resendText}>Renvoyer le code</Text>
@@ -216,7 +228,6 @@ export default function OTPVerification() {
         <Text style={styles.timerText}>Renvoyer dans {timeLeft}s</Text>
       )}
 
-      {/* Texte d’appui */}
       <Text style={styles.helperText}>
         Vous n'avez pas reçu le code ? Vérifiez votre numéro ou attendez le renvoi.
       </Text>

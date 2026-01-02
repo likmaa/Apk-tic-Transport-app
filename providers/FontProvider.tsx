@@ -9,6 +9,7 @@ export default function FontProvider({ children }: { children: React.ReactNode }
     "Unbounded-Bold": require("../assets/fonts/Unbounded-Bold.ttf"),
     "Titillium-Regular": require("../assets/fonts/TitilliumWeb-Regular.ttf"),
     "Titillium-SemiBold": require("../assets/fonts/TitilliumWeb-SemiBold.ttf"),
+    "Titillium-Bold": require("../assets/fonts/TitilliumWeb-Bold.ttf"),
   });
 
   if (!fontsLoaded) {

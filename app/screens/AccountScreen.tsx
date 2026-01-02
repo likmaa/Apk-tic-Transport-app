@@ -133,22 +133,22 @@ export default function AccountScreen() {
         savedAddresses:
             addresses.length > 0
                 ? addresses.map((addr) => ({
-                      icon:
-                          addr.type === 'work'
-                              ? 'briefcase-outline'
-                              : addr.type === 'home'
-                              ? 'home-outline'
-                              : 'location-outline',
-                      label: addr.label,
-                      value: addr.full_address,
-                  }))
+                    icon:
+                        addr.type === 'work'
+                            ? 'briefcase-outline'
+                            : addr.type === 'home'
+                                ? 'home-outline'
+                                : 'location-outline',
+                    label: addr.label,
+                    value: addr.full_address,
+                }))
                 : [
-                      {
-                          icon: 'location-outline',
-                          label: "Aucune adresse enregistrée",
-                          value: "Ajoutez vos adresses depuis l'écran dédié.",
-                      },
-                  ],
+                    {
+                        icon: 'location-outline',
+                        label: "Aucune adresse enregistrée",
+                        value: "Ajoutez vos adresses depuis l'écran dédié.",
+                    },
+                ],
         security: [
             { icon: "lock-closed-outline", label: "Changer le mot de passe" },
             {
@@ -167,7 +167,6 @@ export default function AccountScreen() {
                 value: isNotificationsEnabled,
                 onToggle: () => setIsNotificationsEnabled(!isNotificationsEnabled),
             },
-            { icon: "language-outline", label: "Langue", value: "Français" },
             { icon: "notifications-outline", label: "Préférences de notification" },
         ],
     };
@@ -217,7 +216,7 @@ export default function AccountScreen() {
     return (
         <SafeAreaView style={styles.container}>
             {/* CustomHeader should handle its own back button or be passed a prop to show one */}
-            <CustomHeader /> 
+            <CustomHeader />
 
             {/* If CustomHeader doesn't include a back button, you can add one like this: */}
             {/* <TouchableOpacity style={styles.backButton} onPress={handleBack} activeOpacity={0.7}>
@@ -235,32 +234,32 @@ export default function AccountScreen() {
                         <Text style={styles.name}>{error}</Text>
                     </View>
                 ) : (
-                <View style={styles.profile}>
-                    <Image
-                        source={avatarUri
-                            ? { uri: avatarUri }
-                            : require("../../assets/images/LOGO_OR.png")}
-                        style={styles.avatar}
-                    />
-                    <Text style={styles.name}>{fullName}</Text>
-                    <Text style={styles.joined}>Inscrit le {joinedDate}</Text>
-                    <TouchableOpacity
-                        style={styles.editProfileBtn}
-                        activeOpacity={0.7}
-                        onPress={() => navigation.navigate('screens/account/EditProfile' as never)}
-                    >
-                        <Ionicons name="create-outline" size={18} color={Colors.white} />
-                        <Text style={styles.editProfileText}>Modifier le profil</Text>
-                    </TouchableOpacity>
+                    <View style={styles.profile}>
+                        <Image
+                            source={avatarUri
+                                ? { uri: avatarUri }
+                                : require("../../assets/images/LOGO_OR.png")}
+                            style={styles.avatar}
+                        />
+                        <Text style={styles.name}>{fullName}</Text>
+                        <Text style={styles.joined}>Inscrit le {joinedDate}</Text>
+                        <TouchableOpacity
+                            style={styles.editProfileBtn}
+                            activeOpacity={0.7}
+                            onPress={() => navigation.navigate('screens/account/EditProfile' as never)}
+                        >
+                            <Ionicons name="create-outline" size={18} color={Colors.white} />
+                            <Text style={styles.editProfileText}>Modifier le profil</Text>
+                        </TouchableOpacity>
 
-                    <TouchableOpacity
-                        style={styles.becomeDriverBtn}
-                        activeOpacity={0.7}
-                        onPress={() => navigation.navigate('screens/settings/BecomeDriverScreen' as never)}
-                    >
-                        <Text style={styles.becomeDriverText}>Devenir chauffeur TIC MITON</Text>
-                    </TouchableOpacity>
-                </View>
+                        <TouchableOpacity
+                            style={styles.becomeDriverBtn}
+                            activeOpacity={0.7}
+                            onPress={() => navigation.navigate('screens/settings/BecomeDriverScreen' as never)}
+                        >
+                            <Text style={styles.becomeDriverText}>Devenir chauffeur TIC MITON</Text>
+                        </TouchableOpacity>
+                    </View>
                 )}
 
                 {/* Informations personnelles */}
@@ -352,9 +351,6 @@ export default function AccountScreen() {
                                 index === sections.appPreferences.length - 1 && styles.lastSectionItem,
                             ]}
                             onPress={isSwitch ? undefined : () => {
-                                if (label === 'Langue') {
-                                    navigation.navigate('screens/account/Language' as never);
-                                }
                                 if (label === 'Préférences de notification') {
                                     navigation.navigate('screens/account/NotificationPreferences' as never);
                                 }
@@ -391,7 +387,7 @@ export default function AccountScreen() {
                 </TouchableOpacity>
 
                 {/* Add some bottom padding to the scroll view content */}
-                <View style={{ height: 40 }} /> 
+                <View style={{ height: 40 }} />
             </ScrollView>
         </SafeAreaView>
     );
@@ -404,7 +400,7 @@ const styles = StyleSheet.create({
     },
     // The scrollViewFlex is important to allow the ScrollView to take available space
     scrollViewFlex: {
-        flex: 1, 
+        flex: 1,
     },
     content: {
         paddingHorizontal: 20,
@@ -451,7 +447,7 @@ const styles = StyleSheet.create({
         position: "absolute",
         top: 40, // Adjust based on your header height
         left: 20,
-        zIndex: 1, 
+        zIndex: 1,
         padding: 5, // Add padding for easier tapping
     },
     avatar: {

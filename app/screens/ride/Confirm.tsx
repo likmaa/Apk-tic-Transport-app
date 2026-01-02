@@ -43,7 +43,7 @@ const truncateWords = (text: string | undefined | null, maxWords: number): strin
 
 export default function ConfirmRide() {
   const navigation = useNavigation();
-  const { origin, destination, setOrigin } = useLocationStore();
+  const { origin, destination, setOrigin, requestUserLocation } = useLocationStore();
   const { method } = usePaymentStore();
   const { serviceType } = useServiceStore();
 
@@ -61,19 +61,18 @@ export default function ConfirmRide() {
         return;
       }
       try {
-        const { status } = await ExpoLocation.requestForegroundPermissionsAsync();
-        if (status !== 'granted') {
-          Alert.alert("Permission requise", "La localisation est nécessaire.");
+        const place = await requestUserLocation('origin');
+        if (!place) {
+          // Alert already shown by provider
           navigation.goBack();
           return;
         }
-        const location = await ExpoLocation.getCurrentPositionAsync({});
-        const address = await reverseBackend(location.coords.latitude, location.coords.longitude);
-        setOrigin({
-          address: address || "Ma position actuelle",
-          lat: location.coords.latitude,
-          lon: location.coords.longitude,
-        });
+
+        // Try to refine address
+        const address = await reverseBackend(place.lat, place.lon);
+        if (address) {
+          setOrigin({ ...place, address });
+        }
       } catch (error) {
         Alert.alert("Erreur", "Impossible de récupérer votre position.");
         navigation.goBack();
@@ -110,7 +109,7 @@ export default function ConfirmRide() {
         if (typeof data?.duration_s === 'number') {
           setDurationSeconds(data.duration_s);
         }
-      } catch {}
+      } catch { }
     };
     calculatePrice();
   }, [origin, destination, serviceType]);

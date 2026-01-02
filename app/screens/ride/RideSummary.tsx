@@ -6,31 +6,57 @@ import { Colors } from '../../theme';
 import { Fonts } from '../../font';
 import { useLocationStore } from '../../providers/LocationProvider';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import MapView, { Marker, Polyline, Region } from 'react-native-maps';
+import { MapPlaceholder } from '../../components/MapPlaceholder';
+
+// Tentative d'importation sécurisée de Mapbox
+let Mapbox: any = null;
+let MapView: any = View;
+let Camera: any = View;
+let PointAnnotation: any = View;
+let ShapeSource: any = View;
+let LineLayer: any = View;
+
+try {
+  const MB = require('@rnmapbox/maps');
+  Mapbox = MB.default || MB;
+  MapView = MB.MapView;
+  Camera = MB.Camera;
+  PointAnnotation = MB.PointAnnotation;
+  ShapeSource = MB.ShapeSource;
+  LineLayer = MB.LineLayer;
+
+  if (Mapbox) {
+    Mapbox.setAccessToken(process.env.EXPO_PUBLIC_MAPBOX_TOKEN || '');
+  }
+} catch (e) {
+  Mapbox = null;
+}
 import { useServiceStore } from '../../providers/ServiceProvider';
 
- type RootParams = {
+// Set Mapbox token (ensure this is configured in your project)
+// Mapbox setup handled in catchable block above
+
+type RootParams = {
   'screens/ride/RideSummary': { vehicleId: string; vehicleName: string; price: number; distanceKm: number };
- };
+};
 
 export default function RideSummary() {
   const navigation = useNavigation();
   const route = useRoute<RouteProp<RootParams, 'screens/ride/RideSummary'>>();
   const { origin, destination } = useLocationStore();
-  const { vehicleId, vehicleName, price, distanceKm } = route.params;
+  const { vehicleId, vehicleName } = route.params;
+  const price = Number(route.params.price || 0);
+  const distanceKm = Number(route.params.distanceKm || 0);
   const { serviceType, packageDetails } = useServiceStore();
 
-  const [region, setRegion] = React.useState<Region | undefined>(undefined);
   const [coords, setCoords] = React.useState<Array<{ latitude: number; longitude: number }>>([]);
+  const [center, setCenter] = React.useState<[number, number] | undefined>(undefined);
 
   React.useEffect(() => {
     if (!origin || !destination) return;
-    // Region approximative centrée
-    const midLat = (origin.lat + destination.lat) / 2;
-    const midLon = (origin.lon + destination.lon) / 2;
-    const latDelta = Math.max(0.02, Math.abs(origin.lat - destination.lat) * 1.6);
-    const lonDelta = Math.max(0.02, Math.abs(origin.lon - destination.lon) * 1.6);
-    setRegion({ latitude: midLat, longitude: midLon, latitudeDelta: latDelta, longitudeDelta: lonDelta });
+
+    // Set initial center
+    setCenter([(origin.lon + destination.lon) / 2, (origin.lat + destination.lat) / 2]);
 
     // Récupérer géométrie OSRM
     (async () => {
@@ -56,22 +82,61 @@ export default function RideSummary() {
     })();
   }, [origin, destination]);
 
+  const routeLine = React.useMemo(() => {
+    if (coords.length < 2) return null;
+    return {
+      type: 'Feature',
+      properties: {},
+      geometry: {
+        type: 'LineString',
+        coordinates: coords.map(c => [c.longitude, c.latitude])
+      }
+    };
+  }, [coords]);
+
   return (
     <SafeAreaView style={styles.container}>
       {/* Carte avec tracé */}
-      {origin && destination && region && (
+      {origin && destination && center && (
         <View style={styles.mapBox}>
-          <MapView style={{ flex: 1 }} initialRegion={region}>
-            <Marker coordinate={{ latitude: origin.lat, longitude: origin.lon }}>
-              <MaterialCommunityIcons name="crosshairs-gps" size={24} color={Colors.primary} />
-            </Marker>
-            <Marker coordinate={{ latitude: destination.lat, longitude: destination.lon }}>
-              <MaterialCommunityIcons name="map-marker" size={28} color={'#f59e0b'} />
-            </Marker>
-            {coords.length >= 2 && (
-              <Polyline coordinates={coords} strokeColor={Colors.primary} strokeWidth={4} />
-            )}
-          </MapView>
+          {Mapbox ? (
+            <MapView style={{ flex: 1 }} attributionEnabled={false} logoEnabled={false}>
+              <Camera
+                defaultSettings={{
+                  centerCoordinate: center,
+                  zoomLevel: 12
+                }}
+              />
+
+              <PointAnnotation id="origin" coordinate={[origin.lon, origin.lat]}>
+                <View style={styles.markerContainer}>
+                  <MaterialCommunityIcons name="crosshairs-gps" size={24} color={Colors.primary} />
+                </View>
+              </PointAnnotation>
+
+              <PointAnnotation id="destination" coordinate={[destination.lon, destination.lat]}>
+                <View style={styles.markerContainer}>
+                  <MaterialCommunityIcons name="map-marker" size={28} color={'#f59e0b'} />
+                </View>
+              </PointAnnotation>
+
+              {routeLine && (
+                <ShapeSource id="routeSource" shape={routeLine as any}>
+                  <LineLayer
+                    id="routeFill"
+                    style={{
+                      lineColor: Colors.primary,
+                      lineWidth: 4,
+                      lineCap: 'round',
+                      lineJoin: 'round',
+                    }}
+                  />
+                </ShapeSource>
+              )}
+            </MapView>
+          ) : (
+            <MapPlaceholder style={{ height: '100%' }} />
+          )}
         </View>
       )}
 
@@ -156,6 +221,7 @@ export default function RideSummary() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background, padding: 16 },
   mapBox: { height: 220, borderRadius: 14, overflow: 'hidden', marginBottom: 12, backgroundColor: Colors.lightGray },
+  markerContainer: { alignItems: 'center', justifyContent: 'center' },
   card: { backgroundColor: Colors.white, borderRadius: 14, padding: 16, shadowColor: Colors.black, shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.08, shadowRadius: 2 },
   title: { fontFamily: Fonts.titilliumWebBold, color: Colors.black, fontSize: 20, marginBottom: 12 },
   typeBadge: { alignSelf: 'flex-start', backgroundColor: Colors.background, color: Colors.black, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4, fontFamily: Fonts.titilliumWebBold, marginBottom: 8 },

@@ -1,7 +1,32 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert, Linking } from 'react-native';
-import { useNavigation } from 'expo-router';
-import MapView, { Marker, Polyline, Region } from 'react-native-maps';
+import { useNavigation, useRouter } from 'expo-router';
+import { useRoute, type RouteProp } from '@react-navigation/native';
+import { MapPlaceholder } from '../../components/MapPlaceholder';
+
+// Tentative d'importation sécurisée de Mapbox
+let Mapbox: any = null;
+let MapView: any = View;
+let Camera: any = View;
+let PointAnnotation: any = View;
+let ShapeSource: any = View;
+let LineLayer: any = View;
+
+try {
+  const MB = require('@rnmapbox/maps');
+  Mapbox = MB.default || MB;
+  MapView = MB.MapView;
+  Camera = MB.Camera;
+  PointAnnotation = MB.PointAnnotation;
+  ShapeSource = MB.ShapeSource;
+  LineLayer = MB.LineLayer;
+
+  if (Mapbox) {
+    Mapbox.setAccessToken(process.env.EXPO_PUBLIC_MAPBOX_TOKEN || '');
+  }
+} catch (e) {
+  Mapbox = null;
+}
 import { Colors } from '../../theme';
 import { Fonts } from '../../font';
 import { Ionicons } from '@expo/vector-icons';
@@ -10,6 +35,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { usePaymentStore } from '../../providers/PaymentProvider';
 import { haversineDistanceKm } from '../../utils/distance';
 import { getPusherClient, unsubscribeChannel } from '../../services/pusherClient';
+
+if (Mapbox) {
+  Mapbox.setAccessToken(process.env.EXPO_PUBLIC_MAPBOX_TOKEN || '');
+}
 
 type RouteParams = {
   'screens/ride/DriverTracking': {
@@ -25,15 +54,16 @@ type RouteParams = {
 type LatLng = { latitude: number; longitude: number };
 
 export default function DriverTracking() {
+  const router = useRouter();
   const navigation = useNavigation();
-  const route = (require('@react-navigation/native') as typeof import('@react-navigation/native')).useRoute<
-    import('@react-navigation/native').RouteProp<RouteParams, 'screens/ride/DriverTracking'>
-  >();
+  const route = useRoute<RouteProp<RouteParams, 'screens/ride/DriverTracking'>>();
   const { origin } = useLocationStore();
   const vehicleNameParam = route.params?.vehicleName;
   const rideId = route.params?.rideId;
   const initialDriver = route.params?.driver as { name?: string; phone?: string } | undefined;
   const { method, paymentStatus } = usePaymentStore();
+
+  const cameraRef = React.useRef<any>(null);
 
   const paymentLabel = (m: ReturnType<typeof usePaymentStore>['method']) => {
     const labels: Record<string, string> = {
@@ -46,7 +76,6 @@ export default function DriverTracking() {
     return labels[m] || String(m);
   };
 
-  const [mapRegion, setMapRegion] = React.useState<Region | null>(null);
   const [pickupPos, setPickupPos] = React.useState<LatLng | null>(null);
   const [destinationPos, setDestinationPos] = React.useState<LatLng | null>(null);
   const [driverPos, setDriverPos] = React.useState<LatLng | null>(null);
@@ -189,17 +218,17 @@ export default function DriverTracking() {
     };
   }, [rideId, API_URL]);
 
-  // Mettre à jour la région de la carte
+  // Recenter map logic
   React.useEffect(() => {
     const target = driverPos ?? pickupPos ?? destinationPos ?? (origin ? { latitude: origin.lat, longitude: origin.lon } : null);
     if (!target) return;
 
-    setMapRegion((prev) => ({
-      latitude: target.latitude,
-      longitude: target.longitude,
-      latitudeDelta: prev?.latitudeDelta ?? 0.04,
-      longitudeDelta: prev?.longitudeDelta ?? 0.04,
-    }));
+    // Animate camera to target
+    cameraRef.current?.setCamera({
+      centerCoordinate: [target.longitude, target.latitude],
+      zoomLevel: 14,
+      animationDuration: 1000,
+    });
   }, [driverPos, pickupPos, destinationPos, origin]);
 
   React.useEffect(() => {
@@ -210,7 +239,9 @@ export default function DriverTracking() {
 
     const subscribe = async () => {
       try {
-        const client = await getPusherClient();
+        const token = await AsyncStorage.getItem('authToken');
+        if (!token) return;
+        const client = await getPusherClient(token);
         channel = client.subscribe(`private-ride.${rideId}`);
         channel.bind('driver.location.updated', (payload: any) => {
           if (cancelled) return;
@@ -223,6 +254,38 @@ export default function DriverTracking() {
           if (typeof payload?.eta_minutes === 'number') {
             setEtaMin(payload.eta_minutes);
           }
+        });
+
+        channel.bind('ride.started', (payload: any) => {
+          if (cancelled) return;
+          console.log('Ride started event received', payload);
+          setRideStatus('ongoing');
+          // Navigate to OngoingRide screen
+          navigation.navigate({
+            name: 'screens/ride/OngoingRide',
+            params: { vehicleName: vehicleNameParam || 'Véhicule', rideId: String(rideId) }
+          } as never);
+        });
+
+        channel.bind('ride.completed', (payload: any) => {
+          if (cancelled) return;
+          console.log('Ride completed event received', payload);
+          setRideStatus('completed');
+          navigation.navigate({
+            name: 'screens/ride/RideReceipt',
+            params: {
+              amount: payload.fare_amount || 0,
+              distanceKm: (payload.distance_m || 0) / 1000,
+              vehicleName: vehicleNameParam || 'Véhicule'
+            }
+          } as never);
+        });
+
+        channel.bind('ride.cancelled', (payload: any) => {
+          if (cancelled) return;
+          setRideStatus('cancelled');
+          Alert.alert('Course annulée', 'La course a été annulée.');
+          navigation.navigate('index' as never);
         });
       } catch (error) {
         console.warn('Realtime ride subscription failed', error);
@@ -251,29 +314,69 @@ export default function DriverTracking() {
     }
   }, [driverPos, pickupPos]);
 
-  const currentRegion = mapRegion ?? {
-    latitude: origin?.lat ?? 6.37,
-    longitude: origin?.lon ?? 2.43,
-    latitudeDelta: 0.04,
-    longitudeDelta: 0.04,
-  };
-
   const pickupCoordinate = pickupPos ?? (origin ? { latitude: origin.lat, longitude: origin.lon } : null);
+
+  const routeLine = React.useMemo(() => {
+    if (routeCoords.length < 2) return null;
+    return {
+      type: 'Feature',
+      properties: {},
+      geometry: {
+        type: 'LineString',
+        coordinates: routeCoords.map(c => [c.longitude, c.latitude])
+      }
+    };
+  }, [routeCoords]);
 
   return (
     <View style={styles.container}>
-      <MapView
-        style={StyleSheet.absoluteFill}
-        initialRegion={currentRegion}
-        region={mapRegion ?? undefined}
-        onRegionChangeComplete={setMapRegion}
-      >
-        {driverPos && <Marker coordinate={driverPos} title="Chauffeur" />}
-        {pickupCoordinate && <Marker coordinate={pickupCoordinate} title="Pick-up" pinColor="#f59e0b" />}
-        {routeCoords.length > 0 && (
-          <Polyline coordinates={routeCoords} strokeColor={Colors.primary} strokeWidth={4} />
-        )}
-      </MapView>
+      {Mapbox ? (
+        <MapView
+          style={StyleSheet.absoluteFill}
+          attributionEnabled={false}
+          logoEnabled={false}
+        >
+          <Camera
+            ref={cameraRef}
+            defaultSettings={{
+              centerCoordinate: pickupCoordinate ? [pickupCoordinate.longitude, pickupCoordinate.latitude] : [2.43, 6.37],
+              zoomLevel: 14
+            }}
+          />
+
+          {driverPos && (
+            <PointAnnotation id="driver" coordinate={[driverPos.longitude, driverPos.latitude]}>
+              <View style={styles.markerContainer}>
+                <Ionicons name="car" size={24} color={Colors.black} />
+              </View>
+            </PointAnnotation>
+          )}
+
+          {pickupCoordinate && (
+            <PointAnnotation id="pickup" coordinate={[pickupCoordinate.longitude, pickupCoordinate.latitude]}>
+              <View style={styles.markerContainer}>
+                <Ionicons name="location" size={24} color="#f59e0b" />
+              </View>
+            </PointAnnotation>
+          )}
+
+          {routeLine && (
+            <ShapeSource id="routeSource" shape={routeLine as any}>
+              <LineLayer
+                id="routeFill"
+                style={{
+                  lineColor: Colors.primary,
+                  lineWidth: 4,
+                  lineCap: 'round',
+                  lineJoin: 'round',
+                }}
+              />
+            </ShapeSource>
+          )}
+        </MapView>
+      ) : (
+        <MapPlaceholder style={StyleSheet.absoluteFill} />
+      )}
 
       {/* Bouton retour overlay */}
       <TouchableOpacity style={styles.backOverlay} onPress={() => (navigation as any).goBack?.()}>
@@ -370,4 +473,5 @@ const styles = StyleSheet.create({
   cancelBtn: { marginTop: 12, backgroundColor: '#f97316', borderRadius: 12, alignItems: 'center', paddingVertical: 12, marginBottom: 4 },
   cancelText: { color: Colors.white, fontFamily: Fonts.titilliumWebBold },
   backOverlay: { position: 'absolute', top: 24, left: 16, width: 40, height: 40, borderRadius: 20, backgroundColor: Colors.white, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2, elevation: 2 },
+  markerContainer: { padding: 4, backgroundColor: 'white', borderRadius: 20, elevation: 5 }
 });

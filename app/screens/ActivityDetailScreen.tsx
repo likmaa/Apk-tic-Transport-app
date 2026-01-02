@@ -1,12 +1,37 @@
 // screens/ActivityDetailScreen.tsx
-import React, { useEffect, useState } from 'react';
-import { SafeAreaView, StyleSheet, Text, View, TouchableOpacity, Image, ScrollView } from 'react-native';
+import React, { useEffect, useState, useRef } from 'react';
+import { StyleSheet, Text, View, TouchableOpacity, Image, ScrollView, Platform } from 'react-native';
 import { useNavigation, useRoute, RouteProp, NavigationProp } from '@react-navigation/native';
-import MapView, { Marker, Polyline } from 'react-native-maps';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../theme';
 import { Fonts } from '../font';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { MapPlaceholder } from '../components/MapPlaceholder';
+
+// Tentative d'importation sécurisée de Mapbox
+let Mapbox: any = null;
+let MapView: any = View;
+let Camera: any = View;
+let PointAnnotation: any = View;
+let ShapeSource: any = View;
+let LineLayer: any = View;
+
+try {
+  const MB = require('@rnmapbox/maps');
+  Mapbox = MB.default || MB;
+  MapView = MB.MapView;
+  Camera = MB.Camera;
+  PointAnnotation = MB.PointAnnotation;
+  ShapeSource = MB.ShapeSource;
+  LineLayer = MB.LineLayer;
+
+  if (Mapbox) {
+    Mapbox.setAccessToken(process.env.EXPO_PUBLIC_MAPBOX_TOKEN || '');
+  }
+} catch (e) {
+  console.log('Mapbox native module not available, using placeholder.');
+  Mapbox = null;
+}
 
 // --- TYPES (INCHANGÉS) ---
 type ActivityItem = {
@@ -27,6 +52,8 @@ export default function ActivityDetailScreen() {
   const { activity } = route.params;
   const API_URL: string | undefined = process.env.EXPO_PUBLIC_API_URL;
   const [detailActivity, setDetailActivity] = useState<ActivityItem | null>(null);
+
+  const cameraRef = useRef<any>(null);
 
   useEffect(() => {
     const loadRideDetail = async () => {
@@ -115,25 +142,70 @@ export default function ActivityDetailScreen() {
     ],
   };
 
+  // Convert route coords to Mapbox format [lon, lat]
+  const routeLine = mockActivity.routeCoords
+    ? {
+      type: 'Feature',
+      properties: {},
+      geometry: {
+        type: 'LineString',
+        coordinates: mockActivity.routeCoords.map((c: any) => [c.longitude, c.latitude]),
+      },
+    }
+    : null;
+
   return (
     <View style={styles.container}>
-      {/* Carte en arrière-plan */}
-      <MapView
-        style={StyleSheet.absoluteFill}
-        provider="google"
-        initialRegion={{
-          latitude: (mockActivity.originCoords!.latitude + mockActivity.destCoords!.latitude) / 2,
-          longitude: (mockActivity.originCoords!.longitude + mockActivity.destCoords!.longitude) / 2,
-          latitudeDelta: Math.abs(mockActivity.originCoords!.latitude - mockActivity.destCoords!.latitude) * 2,
-          longitudeDelta: Math.abs(mockActivity.originCoords!.longitude - mockActivity.destCoords!.longitude) * 2,
-        }}
-      >
-        <Marker coordinate={mockActivity.originCoords!} title="Départ" pinColor="green" />
-        <Marker coordinate={mockActivity.destCoords!} title="Arrivée" pinColor="red" />
-        {mockActivity.routeCoords && <Polyline coordinates={mockActivity.routeCoords} strokeColor={Colors.primary} strokeWidth={4} />}
-      </MapView>
+      {/* Carte en arrière-plan (avec fallback si native non dispo) */}
+      {Mapbox ? (
+        <MapView
+          style={StyleSheet.absoluteFill}
+          attributionEnabled={false}
+          logoEnabled={false}
+        >
+          <Camera
+            ref={cameraRef}
+            defaultSettings={{
+              centerCoordinate: [mockActivity.originCoords!.longitude, mockActivity.originCoords!.latitude],
+              zoomLevel: 13
+            }}
+          />
 
-    
+          <PointAnnotation
+            id="origin"
+            coordinate={[mockActivity.originCoords!.longitude, mockActivity.originCoords!.latitude]}
+          >
+            <View style={[styles.dot, styles.originDot]} />
+          </PointAnnotation>
+
+          <PointAnnotation
+            id="destination"
+            coordinate={[mockActivity.destCoords!.longitude, mockActivity.destCoords!.latitude]}
+          >
+            <View style={[styles.dot, styles.destinationDot]} />
+          </PointAnnotation>
+
+          {routeLine && (
+            <ShapeSource id="routeSource" shape={routeLine as any}>
+              <LineLayer
+                id="routeFill"
+                style={{
+                  lineColor: Colors.primary,
+                  lineWidth: 4,
+                  lineCap: 'round',
+                  lineJoin: 'round',
+                }}
+              />
+            </ShapeSource>
+          )}
+        </MapView>
+      ) : (
+        <MapPlaceholder style={StyleSheet.absoluteFill} />
+      )}
+
+      <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+        <Ionicons name="arrow-back" size={24} color={Colors.black} />
+      </TouchableOpacity>
 
       {/* Panneau d'informations inférieur */}
       <View style={styles.bottomSheet}>
@@ -207,6 +279,9 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.lightGray,
   },
+  dot: { width: 12, height: 12, borderRadius: 6, borderWidth: 2, borderColor: 'white' },
+  originDot: { backgroundColor: 'green' },
+  destinationDot: { backgroundColor: 'red' },
   header: {
     position: 'absolute',
     top: 0,

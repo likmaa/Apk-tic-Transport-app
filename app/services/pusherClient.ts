@@ -1,4 +1,4 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
+// import AsyncStorage from '@react-native-async-storage/async-storage';
 import Pusher, { Channel } from 'pusher-js/react-native';
 
 let client: Pusher | null = null;
@@ -6,7 +6,7 @@ let currentToken: string | null = null;
 
 const PUSHER_KEY = process.env.EXPO_PUBLIC_PUSHER_KEY ?? 'local-key';
 const PUSHER_CLUSTER = process.env.EXPO_PUBLIC_PUSHER_CLUSTER ?? 'mt1';
-const WS_HOST = process.env.EXPO_PUBLIC_PUSHER_HOST ?? '192.168.1.200';
+const WS_HOST = process.env.EXPO_PUBLIC_PUSHER_HOST ?? '192.168.1.88';
 const WS_PORT = Number(process.env.EXPO_PUBLIC_PUSHER_PORT ?? '6001');
 const USE_TLS = (process.env.EXPO_PUBLIC_PUSHER_TLS ?? 'false') === 'true';
 
@@ -15,8 +15,7 @@ const apiBase = (() => {
   return raw.replace(/\/api\/?$/, '');
 })();
 
-async function buildClient() {
-  const token = await AsyncStorage.getItem('authToken');
+async function buildClient(token: string) {
   if (!token) {
     throw new Error('Missing auth token for realtime communication');
   }
@@ -48,8 +47,8 @@ async function buildClient() {
   return client;
 }
 
-export async function getPusherClient(): Promise<Pusher> {
-  return buildClient();
+export async function getPusherClient(token: string): Promise<Pusher> {
+  return buildClient(token);
 }
 
 export function unsubscribeChannel(channel?: Channel | null) {

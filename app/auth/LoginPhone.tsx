@@ -14,14 +14,15 @@ import {
   View,
   Alert,
 } from "react-native";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Colors, Fonts } from "../theme";
+import { useAuth } from "../providers/AuthProvider";
 
 export default function LoginPhone() {
   const [phone, setPhone] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
+  const { signIn } = useAuth();
   const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
   const formatPhoneNumber = (text: string) => {
@@ -90,13 +91,13 @@ export default function LoginPhone() {
       }
 
       if (json.status === "already_verified" && json.token) {
-        await AsyncStorage.setItem("authToken", json.token);
-        if (json.user) {
-          await AsyncStorage.setItem("authUser", JSON.stringify(json.user));
-        }
+        // await AsyncStorage.setItem("authToken", json.token);
+        // if (json.user) {
+        //   await AsyncStorage.setItem("authUser", JSON.stringify(json.user));
+        // }
 
         if (json.user?.role === "driver") {
-          await AsyncStorage.clear();
+          // await AsyncStorage.clear();
           Alert.alert(
             "Compte chauffeur",
             "Ce compte est réservé aux chauffeurs. Utilisez l’application conducteur."
@@ -104,7 +105,8 @@ export default function LoginPhone() {
           return;
         }
 
-        router.push({ pathname: "/", params: { phone: e164 } });
+        await signIn(json.token, json.user);
+        // router.push({ pathname: "/", params: { phone: e164 } });
         return;
       }
 
@@ -289,7 +291,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     marginRight: 12,
-    marginBottom:10
+    marginBottom: 10
   },
   countryCode: {
     fontSize: 18,
