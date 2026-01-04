@@ -57,7 +57,7 @@ export default function DriverTracking() {
   const router = useRouter();
   const navigation = useNavigation();
   const route = useRoute<RouteProp<RouteParams, 'screens/ride/DriverTracking'>>();
-  const { origin } = useLocationStore();
+  const { origin, destination, setOrigin: setOriginStore, setDestination: setDestinationStore } = useLocationStore();
   const vehicleNameParam = route.params?.vehicleName;
   const rideId = route.params?.rideId;
   const initialDriver = route.params?.driver as { name?: string; phone?: string } | undefined;
@@ -82,9 +82,34 @@ export default function DriverTracking() {
   const [routeCoords, setRouteCoords] = React.useState<LatLng[]>([]);
   const [pickupAddress, setPickupAddress] = React.useState<string | undefined>(undefined);
   const [etaMin, setEtaMin] = React.useState<number | null>(null);
+  const [distanceKm, setDistanceKm] = React.useState<number | null>(null);
   const [driverName, setDriverName] = React.useState<string | undefined>(initialDriver?.name);
   const [driverPhone, setDriverPhone] = React.useState<string | undefined>(initialDriver?.phone);
   const [rideStatus, setRideStatus] = React.useState<string | undefined>(undefined);
+  const [cancelling, setCancelling] = React.useState(false);
+
+  const handleCancel = () => {
+    if (!rideId) return;
+
+    Alert.alert(
+      'Annuler la course',
+      'Voulez-vous vraiment annuler votre course ?',
+      [
+        { text: 'Non', style: 'cancel' },
+        {
+          text: 'Oui, annuler',
+          style: 'destructive',
+          onPress: () => {
+            // Navigate to the reason selection screen
+            router.push({
+              pathname: '/screens/ride/CancelReason',
+              params: { rideId: String(rideId) }
+            });
+          }
+        },
+      ]
+    );
+  };
 
   const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
@@ -131,14 +156,27 @@ export default function DriverTracking() {
         if (!res.ok) return;
         const json = await res.json();
 
-        if (json?.pickup?.address) setPickupAddress(json.pickup.address);
-        if (typeof json?.pickup?.lat === 'number' && typeof json?.pickup?.lng === 'number') {
-          setPickupPos({ latitude: json.pickup.lat, longitude: json.pickup.lng });
+        if (json?.pickup_address) {
+          setPickupAddress(json.pickup_address);
+          if (json.pickup_lat && json.pickup_lng) {
+            const pPos = { latitude: Number(json.pickup_lat), longitude: Number(json.pickup_lng) };
+            setPickupPos(pPos);
+            // Recovery: fill global store if empty
+            if (!origin) {
+              setOriginStore({ address: json.pickup_address, lat: pPos.latitude, lon: pPos.longitude });
+            }
+          }
         } else if (origin) {
           setPickupPos({ latitude: origin.lat, longitude: origin.lon });
         }
-        if (typeof json?.dropoff?.lat === 'number' && typeof json?.dropoff?.lng === 'number') {
-          setDestinationPos({ latitude: json.dropoff.lat, longitude: json.dropoff.lng });
+
+        if (json?.dropoff_lat && json?.dropoff_lng) {
+          const dPos = { latitude: Number(json.dropoff_lat), longitude: Number(json.dropoff_lng) };
+          setDestinationPos(dPos);
+          // Recovery: fill global store if empty
+          if (!destination) {
+            setDestinationStore({ address: json.dropoff_address || 'Destination', lat: dPos.latitude, lon: dPos.longitude });
+          }
         }
         if (json?.driver) {
           setDriverName(json.driver.name);
@@ -146,6 +184,12 @@ export default function DriverTracking() {
         }
         if (json?.status) {
           setRideStatus(json.status);
+          if (['ongoing', 'started'].includes(json.status)) {
+            navigation.navigate({
+              name: 'screens/ride/OngoingRide',
+              params: { vehicleName: vehicleNameParam || 'Véhicule', rideId: String(rideId) }
+            } as never);
+          }
         }
       } catch {
         // ignore for now
@@ -304,13 +348,15 @@ export default function DriverTracking() {
   React.useEffect(() => {
     if (driverPos && pickupPos) {
       setRouteCoords([driverPos, pickupPos]);
-      const distanceKm = haversineDistanceKm(driverPos, pickupPos);
+      const dist = haversineDistanceKm(driverPos, pickupPos);
+      setDistanceKm(dist);
       // Supposons 25 km/h de moyenne en milieu urbain
-      const etaMinutes = Math.max(1, Math.round((distanceKm / 25) * 60));
+      const etaMinutes = Math.max(1, Math.round((dist / 25) * 60));
       setEtaMin(etaMinutes);
     } else {
       setRouteCoords([]);
       setEtaMin(null);
+      setDistanceKm(null);
     }
   }, [driverPos, pickupPos]);
 
@@ -339,7 +385,7 @@ export default function DriverTracking() {
           <Camera
             ref={cameraRef}
             defaultSettings={{
-              centerCoordinate: pickupCoordinate ? [pickupCoordinate.longitude, pickupCoordinate.latitude] : [2.43, 6.37],
+              centerCoordinate: pickupPos ? [pickupPos.longitude, pickupPos.latitude] : [2.43, 6.37],
               zoomLevel: 14
             }}
           />
@@ -352,8 +398,8 @@ export default function DriverTracking() {
             </PointAnnotation>
           )}
 
-          {pickupCoordinate && (
-            <PointAnnotation id="pickup" coordinate={[pickupCoordinate.longitude, pickupCoordinate.latitude]}>
+          {pickupPos && (
+            <PointAnnotation id="pickup" coordinate={[pickupPos.longitude, pickupPos.latitude]}>
               <View style={styles.markerContainer}>
                 <Ionicons name="location" size={24} color="#f59e0b" />
               </View>
@@ -388,7 +434,10 @@ export default function DriverTracking() {
         <Text style={styles.sheetTitle}>Chauffeur en approche</Text>
         <Text style={styles.sheetSub}>
           {etaMin ? (
-            <>Arrivée estimée dans <Text style={{ color: Colors.primary }}>{etaMin} min</Text></>
+            <>
+              Arrivée estimée dans <Text style={{ color: Colors.primary }}>{etaMin} min</Text>
+              {distanceKm !== null && ` (${distanceKm.toFixed(1)} km)`}
+            </>
           ) : (
             "Localisation en cours..."
           )}
@@ -429,22 +478,23 @@ export default function DriverTracking() {
           )}
         </View>
 
-        <TouchableOpacity
-          style={[styles.payBtn, paymentStatus === 'ready' && styles.payBtnDisabled]}
-          onPress={() => navigation.navigate('screens/payment/PaymentOptions' as never)}
-          disabled={paymentStatus === 'ready'}
-        >
-          <Text style={styles.payText}>{paymentStatus === 'ready' ? 'Paiement prêt' : 'Payer maintenant'}</Text>
-        </TouchableOpacity>
+        {method === 'wallet' && (
+          <TouchableOpacity
+            style={[styles.payBtn, paymentStatus === 'ready' && styles.payBtnDisabled]}
+            onPress={() => navigation.navigate('screens/payment/PaymentOptions' as never)}
+            disabled={paymentStatus === 'ready'}
+          >
+            <Text style={styles.payText}>{paymentStatus === 'ready' ? 'Paiement prêt' : 'Payer par portefeuille'}</Text>
+          </TouchableOpacity>
+        )}
 
         {rideStatus !== 'ongoing' && rideStatus !== 'completed' && (
           <TouchableOpacity
-            style={styles.cancelBtn}
-            onPress={() =>
-              (navigation as any).navigate({ name: 'screens/map/PickLocation', params: { mode: 'destination' } })
-            }
+            style={[styles.cancelBtn, cancelling && { opacity: 0.5 }]}
+            onPress={handleCancel}
+            disabled={cancelling}
           >
-            <Text style={styles.cancelText}>Annuler la course</Text>
+            <Text style={styles.cancelText}>{cancelling ? 'Annulation...' : 'Annuler la course'}</Text>
           </TouchableOpacity>
         )}
       </View>

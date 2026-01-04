@@ -64,15 +64,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         const inAuthGroup = segments[0] === 'auth';
         const inWalkthrough = segments[0] === 'walkthrough';
-        const inSplash = segments[0] === 'Splash';
+        const inSplash = (segments as any)[0] === 'Splash' || (segments as any)[0] === 'index' || (segments as any).length === 0;
 
-        // If not signed in and not in public areas, redirect to login
+        const isAtRoot = (segments as any)[0] === 'index' || (segments as any).length === 0;
+
+        // If not signed in and not in public areas, redirect to onboarding
         if (!token && !inAuthGroup && !inWalkthrough && !inSplash) {
-            // Use replace to avoid back button capability
-            router.replace('/auth/LoginPhone');
+            router.replace('/walkthrough/Walkthrough1');
         } else if (token && (inAuthGroup || inWalkthrough)) {
             // If signed in and in auth/walkthrough, redirect to home
-            router.replace('/');
+            router.replace('/(tabs)');
         }
     }, [token, segments, isLoading]);
 

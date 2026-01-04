@@ -2,10 +2,12 @@ import React from 'react';
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../theme';
-
 import { Fonts } from '../font';
+import { useActiveRideCount } from '../hooks/useActiveRideCount';
 
 export default function TabsLayout() {
+  const activeRideCount = useActiveRideCount();
+
   return (
     <Tabs
       screenOptions={{
@@ -47,6 +49,12 @@ export default function TabsLayout() {
         options={{
           title: 'Activité',
           tabBarIcon: ({ color, size }) => <Ionicons name="car-sport" color={color} size={size} />,
+          tabBarBadge: activeRideCount > 0 ? activeRideCount : undefined,
+          tabBarBadgeStyle: {
+            backgroundColor: Colors.primary,
+            color: Colors.white,
+            fontSize: 10,
+          }
         }}
       />
       <Tabs.Screen

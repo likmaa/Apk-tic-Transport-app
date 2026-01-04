@@ -68,7 +68,7 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
     reset: () => { setOrigin(null); setDestination(null); },
     requestUserLocation: async (target: 'origin' | 'destination' | 'none' = 'origin') => {
       try {
-        const { requestForegroundPermissionsAsync, getCurrentPositionAsync } = await import('expo-location');
+        const { requestForegroundPermissionsAsync, getCurrentPositionAsync, Accuracy } = await import('expo-location');
         const { status } = await requestForegroundPermissionsAsync();
         if (status !== 'granted') {
           const { Alert, Linking } = await import('react-native');
@@ -82,9 +82,17 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
           );
           return null;
         }
-        const loc = await getCurrentPositionAsync({});
-        const lat = loc.coords.latitude;
-        const lon = loc.coords.longitude;
+        const loc = await getCurrentPositionAsync({ accuracy: Accuracy.Balanced });
+        let lat = loc.coords.latitude;
+        let lon = loc.coords.longitude;
+
+        // Détection automatique du simulateur (San Francisco par défaut)
+        // On redirige automatiquement vers Cotonou pour faciliter le développement
+        if (Math.abs(lat - 37.77) < 0.1 && Math.abs(lon + 122.41) < 0.1) {
+          console.log("📍 Simulateur détecté (SF), bascule automatique sur Cotonou.");
+          lat = 6.3703;
+          lon = 2.3912;
+        }
 
         // Validation de la zone de service
         const { SERVICE_AREA } = await import('../config');

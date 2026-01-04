@@ -1,16 +1,19 @@
-import React from 'react';
-import { SafeAreaView, StyleSheet, Text, View, TouchableOpacity, Alert, Switch } from 'react-native';
+import React, { useState } from 'react';
+import { SafeAreaView, StyleSheet, Text, View, TouchableOpacity, Alert, TextInput, ScrollView } from 'react-native';
 import { Colors } from '../../theme';
 import { Fonts } from '../../font';
-import { useNavigation, useRouter } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { useRoute, type RouteProp } from '@react-navigation/native';
 import { useServiceStore } from '../../providers/ServiceProvider';
 import { usePaymentStore } from '../../providers/PaymentProvider';
+import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { MapPlaceholder } from '../../components/MapPlaceholder';
 
 type RootParams = {
   'screens/ride/RideReceipt': {
+    rideId: string;
     amount: number;
     distanceKm: number;
     vehicleName: string;
@@ -24,12 +27,16 @@ type RootParams = {
 
 export default function RideReceipt() {
   const router = useRouter();
-  const navigation = useNavigation();
   const route = useRoute<RouteProp<RootParams, 'screens/ride/RideReceipt'>>();
+  const rideId = route.params?.rideId;
   const amount = Number(route.params?.amount ?? 0);
   const distanceKm = Number(route.params?.distanceKm ?? 0);
   const vehicleName = route.params?.vehicleName ?? 'Standard';
   const durationMin = route.params?.durationMin ?? '--';
+
+  const [stars, setStars] = useState(5);
+  const [tip, setTip] = useState<number | null>(null);
+  const [loading, setLoading] = useState(false);
 
   // Coordinates for Map
   const pickupLat = Number(route.params?.pickupLat ?? 0);
@@ -37,21 +44,48 @@ export default function RideReceipt() {
   const dropoffLat = Number(route.params?.dropoffLat ?? 0);
   const dropoffLng = Number(route.params?.dropoffLng ?? 0);
 
-  const { serviceType, packageDetails } = useServiceStore();
+  const { serviceType } = useServiceStore();
   const base = amount > 800 ? 800 : amount;
   const other = amount - base;
+
+  const tipOptions = [200, 500, 1000, 2000];
 
   // Center map on path
   const center = (pickupLat && dropoffLat) ? [(pickupLng + dropoffLng) / 2, (pickupLat + dropoffLat) / 2] : undefined;
 
-  const handleClose = () => {
-    // Navigate slightly differently to ensure we hit the MAIN Root Navigation (Image 1)
-    // and not the (tabs) sub-navigator (Image 2) if they are distinct.
-    // 'Home' refers to the screen name in app/index.tsx (if app/index.tsx is the root tab navigator)
+  const handleSubmitRating = async () => {
+    if (!rideId) {
+      router.replace('/');
+      return;
+    }
+    setLoading(true);
+    try {
+      const token = await AsyncStorage.getItem('authToken');
+      const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
-    // Using router.replace('/') usually goes to index.tsx. 
-    // If index.tsx IS the main tab navigator, this is correct.
-    router.replace('/');
+      const res = await fetch(`${API_URL}/passenger/ratings`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          ride_id: rideId,
+          stars,
+          tip_amount: tip || 0,
+        }),
+      });
+
+      if (res.ok) {
+        Alert.alert('Merci !', 'Votre note et votre pourboire ont été enregistrés.');
+      }
+    } catch (e) {
+      console.warn('Rating error:', e);
+    } finally {
+      setLoading(false);
+      router.replace('/');
+    }
   };
 
   return (
@@ -76,68 +110,100 @@ export default function RideReceipt() {
         ) : (
           <MapPlaceholder style={StyleSheet.absoluteFill} />
         )}
-        {/* Overlay Gradiant or Darken */}
         <View style={styles.mapOverlay} />
       </View>
 
-      {/* CARD CONTENT */}
-      <SafeAreaView style={styles.contentContainer}>
-        <View style={{ flex: 1 }} />
+      {/* CONTENT WITH SCROLL */}
+      <SafeAreaView style={styles.safeArea}>
+        <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+          <View style={{ height: 100 }} />
 
-        <View style={styles.card}>
-          <Text style={styles.title}>Course terminée !</Text>
-          <Text style={styles.subHeader}>Merci d'avoir voyagé avec TIC.</Text>
-
-          <View style={styles.divider} />
-
-          <View style={styles.statsRow}>
-            <View style={styles.statItem}>
-              <Text style={styles.statLabel}>Distance</Text>
-              <Text style={styles.statValue}>{distanceKm.toFixed(1)} km</Text>
+          <View style={styles.card}>
+            <View style={styles.successIcon}>
+              <Ionicons name="checkmark-circle" size={48} color="#22c55e" />
             </View>
-            <View style={styles.verticalLine} />
-            <View style={styles.statItem}>
-              <Text style={styles.statLabel}>Durée</Text>
-              <Text style={styles.statValue}>{durationMin} min</Text>
-            </View>
-            <View style={styles.verticalLine} />
-            <View style={styles.statItem}>
-              <Text style={styles.statLabel}>Prix</Text>
-              <Text style={styles.statValue}>{(amount).toLocaleString('fr-FR')}</Text>
-            </View>
-          </View>
+            <Text style={styles.title}>Course terminée !</Text>
+            <Text style={styles.subHeader}>Le montant a été payé avec succès.</Text>
 
-          <View style={styles.divider} />
+            <View style={styles.statsRow}>
+              <View style={styles.statItem}>
+                <Text style={styles.statLabel}>Distance</Text>
+                <Text style={styles.statValue}>{distanceKm.toFixed(1)} km</Text>
+              </View>
+              <View style={styles.verticalLine} />
+              <View style={styles.statItem}>
+                <Text style={styles.statLabel}>Durée</Text>
+                <Text style={styles.statValue}>{durationMin} min</Text>
+              </View>
+              <View style={styles.verticalLine} />
+              <View style={styles.statItem}>
+                <Text style={styles.statLabel}>Prix</Text>
+                <Text style={styles.statValue}>{(amount).toLocaleString('fr-FR')}</Text>
+              </View>
+            </View>
 
-          <View style={styles.detailsRow}>
-            <Text style={styles.label}>Véhicule</Text>
-            <Text style={styles.value}>{vehicleName}</Text>
-          </View>
-          <View style={styles.detailsRow}>
-            <Text style={styles.label}>Base</Text>
-            <Text style={styles.value}>{base.toLocaleString('fr-FR')} FCFA</Text>
-          </View>
-          {other > 0 && (
+            <View style={styles.divider} />
+
+            {/* RATING SECTION */}
+            <View style={styles.ratingSection}>
+              <Text style={styles.ratingTitle}>Notez votre chauffeur</Text>
+              <View style={styles.starsRow}>
+                {[1, 2, 3, 4, 5].map((s) => (
+                  <TouchableOpacity key={s} onPress={() => setStars(s)} style={{ padding: 5 }}>
+                    <Ionicons
+                      name={s <= stars ? "star" : "star-outline"}
+                      size={32}
+                      color={s <= stars ? "#fbbf24" : Colors.lightGray}
+                    />
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            <View style={styles.divider} />
+
+            {/* TIP SECTION */}
+            <View style={styles.tipSection}>
+              <Text style={styles.tipTitle}>Ajouter un pourboire ?</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tipOptions}>
+                <TouchableOpacity
+                  style={[styles.tipCard, tip === null && styles.tipCardActive]}
+                  onPress={() => setTip(null)}
+                >
+                  <Text style={[styles.tipAmount, tip === null && styles.tipAmountActive]}>Non</Text>
+                </TouchableOpacity>
+                {tipOptions.map((opt) => (
+                  <TouchableOpacity
+                    key={opt}
+                    style={[styles.tipCard, tip === opt && styles.tipCardActive]}
+                    onPress={() => setTip(opt)}
+                  >
+                    <Text style={[styles.tipAmount, tip === opt && styles.tipAmountActive]}>{opt}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+
+            <View style={styles.divider} />
+
             <View style={styles.detailsRow}>
-              <Text style={styles.label}>Frais & autres</Text>
-              <Text style={styles.value}>{other.toLocaleString('fr-FR')} FCFA</Text>
+              <Text style={styles.totalLabel}>Total à payer</Text>
+              <Text style={styles.totalValue}>{(amount + (tip || 0)).toLocaleString('fr-FR')} FCFA</Text>
             </View>
-          )}
 
-          <View style={[styles.detailsRow, { marginTop: 8 }]}>
-            <Text style={styles.totalLabel}>Total payé</Text>
-            <Text style={styles.totalValue}>{amount.toLocaleString('fr-FR')} FCFA</Text>
-          </View>
-
-          <View style={styles.actions}>
-            <TouchableOpacity style={styles.secondaryBtn} onPress={() => Alert.alert('Envoyé', 'Le reçu a été envoyé par email.')}>
-              <Text style={styles.secondaryText}>Reçu par email</Text>
+            <TouchableOpacity
+              style={[styles.primaryBtn, loading && { opacity: 0.7 }]}
+              onPress={handleSubmitRating}
+              disabled={loading}
+            >
+              <Text style={styles.primaryText}>{loading ? 'Envoi...' : "Terminer"}</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.primaryBtn} onPress={handleClose}>
-              <Text style={styles.primaryText}>Retour à l'accueil</Text>
+
+            <TouchableOpacity style={styles.receiptBtn} onPress={() => Alert.alert('Envoyé', 'Le reçu a été envoyé par email.')}>
+              <Text style={styles.receiptBtnText}>Envoyer le reçu par email</Text>
             </TouchableOpacity>
           </View>
-        </View>
+        </ScrollView>
       </SafeAreaView>
     </View>
   );
@@ -166,52 +232,47 @@ try {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
-  mapContainer: { height: '40%', width: '100%', position: 'absolute', top: 0, left: 0 },
-  mapOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.1)' },
-  contentContainer: { flex: 1, padding: 16 },
+  mapContainer: { height: '50%', width: '100%', position: 'absolute', top: 0, left: 0 },
+  mapOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(255,255,255,0.4)' },
 
-  card: { backgroundColor: Colors.white, borderRadius: 20, padding: 24, shadowColor: Colors.black, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 10, elevation: 5, marginBottom: 10 },
+  safeArea: { flex: 1 },
+  scrollView: { flex: 1 },
+  scrollContent: { padding: 20 },
 
-  title: { fontFamily: Fonts.unboundedBold, color: Colors.black, fontSize: 24, marginBottom: 4, textAlign: 'center' },
-  subHeader: { fontFamily: Fonts.titilliumWeb, color: Colors.gray, fontSize: 16, marginBottom: 20, textAlign: 'center' },
+  card: { backgroundColor: Colors.white, borderRadius: 24, padding: 24, shadowColor: Colors.black, shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.1, shadowRadius: 20, elevation: 10 },
+  successIcon: { alignSelf: 'center', marginBottom: 12 },
+  title: { fontFamily: Fonts.titilliumWebBold, color: Colors.black, fontSize: 24, marginBottom: 4, textAlign: 'center' },
+  subHeader: { fontFamily: Fonts.titilliumWeb, color: Colors.gray, fontSize: 15, marginBottom: 24, textAlign: 'center' },
 
-  divider: { height: 1, backgroundColor: Colors.lightGray, marginVertical: 16 },
-
-  statsRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  statsRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: Colors.background, borderRadius: 16, padding: 16 },
   statItem: { alignItems: 'center', flex: 1 },
-  statLabel: { fontFamily: Fonts.titilliumWeb, color: Colors.gray, fontSize: 13, marginBottom: 4 },
-  statValue: { fontFamily: Fonts.titilliumWebBold, color: Colors.black, fontSize: 16 },
-  verticalLine: { width: 1, height: 30, backgroundColor: Colors.lightGray },
+  statLabel: { fontFamily: Fonts.titilliumWeb, color: Colors.gray, fontSize: 12, marginBottom: 4 },
+  statValue: { fontFamily: Fonts.titilliumWebBold, color: Colors.black, fontSize: 15 },
+  verticalLine: { width: 1, height: 24, backgroundColor: Colors.lightGray },
 
-  detailsRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 },
-  label: { fontFamily: Fonts.titilliumWeb, color: Colors.gray, fontSize: 15 },
-  value: { fontFamily: Fonts.titilliumWebSemiBold, color: Colors.black, fontSize: 15 },
+  divider: { height: 1, backgroundColor: Colors.lightGray, marginVertical: 20 },
 
-  totalLabel: { fontFamily: Fonts.unboundedBold, color: Colors.black, fontSize: 16 },
-  totalValue: { fontFamily: Fonts.unboundedBold, color: Colors.primary, fontSize: 20 },
+  ratingSection: { alignItems: 'center' },
+  ratingTitle: { fontFamily: Fonts.titilliumWebBold, fontSize: 16, color: Colors.black, marginBottom: 16 },
+  starsRow: { flexDirection: 'row', gap: 8 },
 
-  actions: { flexDirection: 'row', gap: 12, marginTop: 24 },
-  secondaryBtn: { flex: 1, backgroundColor: Colors.white, paddingVertical: 14, borderRadius: 12, alignItems: 'center', borderWidth: 1, borderColor: Colors.lightGray },
-  secondaryText: { fontFamily: Fonts.titilliumWebBold, color: Colors.black },
-  primaryBtn: { flex: 1, backgroundColor: Colors.primary, paddingVertical: 14, borderRadius: 12, alignItems: 'center', shadowColor: Colors.primary, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 8 },
-  primaryText: { color: Colors.white, fontFamily: Fonts.titilliumWebBold },
+  tipSection: { alignItems: 'center' },
+  tipTitle: { fontFamily: Fonts.titilliumWebBold, fontSize: 16, color: Colors.black, marginBottom: 12 },
+  tipOptions: { flexDirection: 'row', gap: 10, paddingBottom: 5 },
+  tipCard: { backgroundColor: Colors.background, paddingHorizontal: 20, paddingVertical: 10, borderRadius: 12, borderWidth: 1, borderColor: Colors.lightGray },
+  tipCardActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
+  tipAmount: { fontFamily: Fonts.titilliumWebSemiBold, color: Colors.black, fontSize: 14 },
+  tipAmountActive: { color: Colors.white },
 
-  // unused valid styles
-  typeBadge: { display: 'none' },
-  row: { display: 'none' },
-  rowBetween: { display: 'none' },
-  sep: { display: 'none' },
-  subTitle: { display: 'none' },
+  detailsRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
+  totalLabel: { fontFamily: Fonts.titilliumWebBold, color: Colors.black, fontSize: 18 },
+  totalValue: { fontFamily: Fonts.titilliumWebBold, color: Colors.primary, fontSize: 22 },
+
+  primaryBtn: { backgroundColor: Colors.primary, paddingVertical: 16, borderRadius: 16, alignItems: 'center', shadowColor: Colors.primary, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 5 },
+  primaryText: { color: Colors.white, fontFamily: Fonts.titilliumWebBold, fontSize: 16 },
+
+  receiptBtn: { marginTop: 16, paddingVertical: 10, alignItems: 'center' },
+  receiptBtnText: { fontFamily: Fonts.titilliumWebSemiBold, color: Colors.gray, fontSize: 14 },
+
   dot: { width: 14, height: 14, borderRadius: 7, borderWidth: 2, borderColor: 'white' },
 });
-
-function labelFor(m: ReturnType<typeof usePaymentStore>['method']) {
-  switch (m) {
-    case 'cash': return 'Espèces';
-    case 'mobile_money': return 'Mobile Money';
-    case 'card': return 'Carte bancaire';
-    case 'wallet': return 'Portefeuille';
-    case 'qr': return 'QR Code';
-    default: return String(m);
-  }
-}

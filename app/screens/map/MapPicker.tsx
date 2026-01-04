@@ -1,6 +1,7 @@
 // screens/map/MapPicker.tsx
 import React, { useEffect, useRef, useState } from 'react';
-import { SafeAreaView, StyleSheet, Text, View, TouchableOpacity, ActivityIndicator, Dimensions, TextInput, Animated, PanResponder } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity, ActivityIndicator, Dimensions, TextInput, Animated, PanResponder, Platform } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { MapPlaceholder } from '../../components/MapPlaceholder';
 
@@ -56,7 +57,6 @@ export default function MapPickerScreen() {
   const mode = (params.mode as 'origin' | 'destination') || 'destination';
   const { origin, destination, setOrigin, setDestination, requestUserLocation } = useLocationStore();
 
-  // Coordonnées par défaut (Cotonou)
   const [centerCoordinate, setCenterCoordinate] = useState<[number, number]>([2.3912362, 6.3702931]);
   const [revLoading, setRevLoading] = useState(true);
   const [selected, setSelected] = useState<{ address: string; lat: number; lon: number } | null>(null);
@@ -65,26 +65,29 @@ export default function MapPickerScreen() {
   const cameraRef = useRef<any>(null);
 
   const sheetTranslateY = useRef(new Animated.Value(0)).current;
-  const SHEET_MAX_DRAG = 180;
+  const SHEET_PEEK_HEIGHT = 240;
+  const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
   const sheetPanResponder = useRef(
     PanResponder.create({
       onMoveShouldSetPanResponder: (_: any, gesture: any) => Math.abs(gesture.dy) > 8,
       onPanResponderMove: (_: any, gesture: any) => {
-        const y = Math.min(Math.max(gesture.dy, -SHEET_MAX_DRAG), SHEET_MAX_DRAG);
-        sheetTranslateY.setValue(y);
+        const y = Math.max(gesture.dy, -100); // Limit upward drag
+        sheetTranslateY.setValue(y > 0 ? y : y * 0.2); // Resistance when dragging up
       },
       onPanResponderRelease: (_: any, gesture: any) => {
-        const shouldOpen = gesture.dy < 0;
+        if (gesture.dy > 100) {
+          // Could implement "close" or "minimize" logic here
+        }
         Animated.spring(sheetTranslateY, {
-          toValue: shouldOpen ? -SHEET_MAX_DRAG : 0,
+          toValue: 0,
           useNativeDriver: true,
+          tension: 50,
         }).start();
       },
     })
   ).current;
 
-  // Centre la carte sur la position de l'utilisateur au montage
   useEffect(() => {
     const locateUser = async () => {
       try {
@@ -95,16 +98,14 @@ export default function MapPickerScreen() {
         }
 
         const { lat, lon } = place;
-        setCenterCoordinate([lon, lat]); // Mapbox prend [lon, lat]
+        setCenterCoordinate([lon, lat]);
 
-        // Animation caméra
         cameraRef.current?.setCamera({
           centerCoordinate: [lon, lat],
-          zoomLevel: 15,
+          zoomLevel: 16,
           animationDuration: 1000,
         });
 
-        // Géocodage
         const addr = await reverseBackend(lat, lon);
         setSelected({ address: addr || `${lat.toFixed(5)}, ${lon.toFixed(5)}`, lat, lon });
       } catch (e) {
@@ -115,28 +116,6 @@ export default function MapPickerScreen() {
     };
     locateUser();
   }, []);
-
-  // Met à jour l'adresse lorsque l'utilisateur déplace la carte (fin du drag)
-  const onRegionDidChange = async (feature: any) => {
-    if (!feature?.properties?.visibleBounds) return;
-
-    // Pour trouver le centre, Mapbox retourne bounds, pas direct center dans l'event simple
-    // Une astuce est d'utiliser getCenter() sur la mapRef, ou de tracker via onCameraChanged
-    // Mais ici 'feature' contient souvent geometry type Point si c'est 'regionDidChange'
-
-    const center = feature.geometry.coordinates; // [lon, lat]
-    if (!center) return;
-
-    setRevLoading(true);
-    try {
-      const [lon, lat] = center;
-      const addr = await reverseBackend(lat, lon);
-      setSelected({ address: addr || `📍 Point sur la carte`, lat: lat, lon: lon });
-    } finally {
-      setRevLoading(false);
-    }
-  };
-
 
   const handleConfirm = () => {
     if (!selected) return;
@@ -153,26 +132,22 @@ export default function MapPickerScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
+      {/* Full Background Map */}
       <View style={styles.mapContainer}>
         {Mapbox ? (
           <MapView
             ref={mapRef}
             style={StyleSheet.absoluteFill}
+            attributionEnabled={false}
+            logoEnabled={false}
             maxBounds={{
               ne: [SERVICE_AREA.BOUNDS[2], SERVICE_AREA.BOUNDS[3]],
               sw: [SERVICE_AREA.BOUNDS[0], SERVICE_AREA.BOUNDS[1]],
             }}
-            // styleURL={Mapbox.StyleURL.Street}
-            onCameraChanged={(state: any) => {
-              // Optional: Track live movement
-            }}
             onMapIdle={(state: any) => {
-              // C'est l'équivalent de onRegionChangeComplete
-              // state.properties.center est [lon, lat]
               const { center } = state.properties;
               const [lon, lat] = center;
-              // On déclenche le reverse géocodage
               setRevLoading(true);
               reverseBackend(lat, lon).then(addr => {
                 setSelected({ address: addr || `📍 Point sur la carte`, lat, lon });
@@ -184,7 +159,7 @@ export default function MapPickerScreen() {
               ref={cameraRef}
               defaultSettings={{
                 centerCoordinate: centerCoordinate,
-                zoomLevel: 12,
+                zoomLevel: 15,
               }}
             />
           </MapView>
@@ -192,84 +167,300 @@ export default function MapPickerScreen() {
           <MapPlaceholder style={StyleSheet.absoluteFill} />
         )}
 
-        {/* Pin central fixe (Design UI) */}
+        {/* Floating Controls */}
+        <SafeAreaView style={styles.controlsLayer} pointerEvents="box-none">
+          <TouchableOpacity
+            style={styles.floatingButton}
+            onPress={() => router.back()}
+          >
+            <Ionicons name="arrow-back" size={24} color={Colors.black} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.floatingButton, styles.locateButton]}
+            onPress={async () => {
+              const place = await requestUserLocation('none');
+              if (place) {
+                cameraRef.current?.setCamera({
+                  centerCoordinate: [place.lon, place.lat],
+                  zoomLevel: 16,
+                  animationDuration: 500
+                });
+              }
+            }}
+          >
+            <Ionicons name="locate" size={24} color={Colors.black} />
+          </TouchableOpacity>
+        </SafeAreaView>
+
+        {/* Center Pin Overlay */}
         <View style={styles.pinOverlay} pointerEvents="none">
-          <View style={styles.pinShadow} />
-          <Ionicons name="location" size={40} color={Colors.primary} style={styles.pinIcon} />
+          <View style={styles.pinWrapper}>
+            {/* Tooltip indication */}
+            <View style={styles.selectionTooltip}>
+              <Text style={styles.selectionTooltipText}>{revLoading ? 'Chargement...' : 'Position choisie'}</Text>
+              <View style={styles.selectionTooltipArrow} />
+            </View>
+            <Ionicons name="location" size={48} color={Colors.primary} style={styles.pinIcon} />
+            <View style={styles.pinShadow} />
+          </View>
         </View>
-
-        <TouchableOpacity style={[styles.mapButton, styles.backButton]} onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={24} color={Colors.black} />
-        </TouchableOpacity>
-
-        <TouchableOpacity style={[styles.mapButton, styles.locateButton]} onPress={async () => {
-          const place = await requestUserLocation('none');
-          if (place) {
-            cameraRef.current?.setCamera({
-              centerCoordinate: [place.lon, place.lat],
-              zoomLevel: 15,
-              animationDuration: 500
-            })
-          }
-        }}>
-          <Ionicons name="locate" size={22} color={Colors.black} />
-        </TouchableOpacity>
       </View>
 
-      {/* Panneau inférieur */}
+      {/* Premium Panel */}
       <Animated.View
-        style={[styles.bottomSheet, { transform: [{ translateY: sheetTranslateY }] }]}
+        style={[
+          styles.bottomSheet,
+          { transform: [{ translateY: sheetTranslateY }] }
+        ]}
         {...sheetPanResponder.panHandlers}
       >
         <View style={styles.sheetHandle} />
-        <Text style={styles.sheetTitle}>Déplacer la carte pour choisir</Text>
-        <Text style={styles.sheetSubtitle}>{mode === 'origin' ? 'le point de départ' : 'la destination'}</Text>
 
-        <View style={styles.addressBox}>
-          {revLoading ? (
-            <ActivityIndicator color={Colors.primary} />
-          ) : (
-            <TextInput
-              style={styles.addressText}
-              value={selected?.address || ''}
-              onChangeText={(text) => setSelected((prev) => (prev ? { ...prev, address: text } : prev))}
-              placeholder="Définition de l'adresse..."
-              placeholderTextColor={Colors.gray}
-              multiline
-              textAlign="center"
+        <View style={styles.sheetHeader}>
+          <Text style={styles.sheetTitle}>Choisir sur la carte</Text>
+          <Text style={styles.sheetSubtitle}>
+            Déplacez la carte pour choisir précisément {mode === 'origin' ? 'le départ' : 'la destination'}
+          </Text>
+        </View>
+
+        <View style={styles.addressCard}>
+          <View style={styles.addressIconCircle}>
+            <Ionicons
+              name={mode === 'origin' ? "pin" : "location-sharp"}
+              size={20}
+              color={mode === 'origin' ? "#10b981" : "#ef4444"}
             />
-          )}
+          </View>
+          <View style={styles.addressContent}>
+            <Text style={styles.addressLabel}>
+              {mode === 'origin' ? 'Point de départ' : 'Destination'}
+            </Text>
+            {revLoading ? (
+              <View style={styles.loadingWrapper}>
+                <ActivityIndicator size="small" color={Colors.primary} />
+                <Text style={styles.loadingText}>Recherche de l'adresse...</Text>
+              </View>
+            ) : (
+              <TextInput
+                style={styles.addressInput}
+                value={selected?.address || ''}
+                onChangeText={(text) => setSelected((prev) => (prev ? { ...prev, address: text } : prev))}
+                placeholder="Indiquez l'adresse précise..."
+                placeholderTextColor={Colors.gray}
+                multiline
+              />
+            )}
+          </View>
         </View>
 
         <TouchableOpacity
-          style={[styles.confirmButton, !selected && { opacity: 0.5 }]}
+          style={[styles.confirmButton, !selected && styles.confirmButtonDisabled]}
           onPress={handleConfirm}
-          disabled={!selected}
+          disabled={!selected || revLoading}
         >
-          <Text style={styles.confirmButtonText}>Confirmer l'emplacement</Text>
+          <Text style={styles.confirmButtonText}>Confirmer cet emplacement</Text>
+          <Ionicons name="chevron-forward" size={20} color="white" style={{ marginLeft: 8 }} />
         </TouchableOpacity>
+
+        <SafeAreaView edges={['bottom']} />
       </Animated.View>
-    </SafeAreaView>
+    </View>
   );
 }
 
-const { height } = Dimensions.get('window');
-
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: 'white' },
-  mapContainer: { height: height * 0.6, backgroundColor: Colors.lightGray },
-  pinOverlay: { ...StyleSheet.absoluteFillObject, justifyContent: 'center', alignItems: 'center', marginBottom: 40 },
-  pinIcon: { textShadowColor: 'rgba(0, 0, 0, 0.2)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 4 },
-  pinShadow: { position: 'absolute', width: 12, height: 12, borderRadius: 6, backgroundColor: 'rgba(0,0,0,0.2)', bottom: -2, transform: [{ scaleX: 2 }] },
-  mapButton: { position: 'absolute', backgroundColor: 'white', width: 48, height: 48, borderRadius: 24, justifyContent: 'center', alignItems: 'center', shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 5 },
-  backButton: { top: 40, left: 20 },
-  locateButton: { top: 40, right: 20 },
-  bottomSheet: { flex: 1, backgroundColor: 'white', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, paddingTop: 16, marginTop: -20 },
-  sheetHandle: { alignSelf: 'center', width: 40, height: 4, borderRadius: 2, backgroundColor: Colors.lightGray, marginBottom: 10 },
-  sheetTitle: { fontFamily: Fonts.titilliumWebBold, fontSize: 17, color: Colors.black, textAlign: 'center' },
-  sheetSubtitle: { fontFamily: Fonts.titilliumWeb, fontSize: 15, color: Colors.gray, textAlign: 'center', marginBottom: 20 },
-  addressBox: { backgroundColor: Colors.background, borderRadius: 12, padding: 16, minHeight: 70, justifyContent: 'center', alignItems: 'center', marginBottom: 20 },
-  addressText: { fontFamily: Fonts.titilliumWebSemiBold, fontSize: 16, color: Colors.black, textAlign: 'center' },
-  confirmButton: { backgroundColor: Colors.primary, paddingVertical: 16, borderRadius: 12, alignItems: 'center' },
-  confirmButtonText: { color: 'white', fontFamily: Fonts.titilliumWebBold, fontSize: 18 },
+  container: {
+    flex: 1,
+    backgroundColor: Colors.white
+  },
+  mapContainer: {
+    flex: 1,
+    backgroundColor: '#F3F4F6'
+  },
+  controlsLayer: {
+    ...StyleSheet.absoluteFillObject,
+    padding: 20,
+  },
+  floatingButton: {
+    backgroundColor: 'white',
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 6,
+    zIndex: 10,
+  },
+  locateButton: {
+    position: 'absolute',
+    top: 60, // Standard offset for back button
+    right: 20,
+  },
+  pinOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
+    alignItems: 'center',
+    pointerEvents: 'none',
+  },
+  pinWrapper: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: -48, // Adjust for icon height to center point
+  },
+  pinIcon: {
+    zIndex: 2,
+  },
+  pinShadow: {
+    width: 8,
+    height: 4,
+    borderRadius: 4,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    marginTop: -4,
+    transform: [{ scaleX: 3 }],
+  },
+  selectionTooltip: {
+    backgroundColor: Colors.black,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    marginBottom: 8,
+    alignItems: 'center',
+  },
+  selectionTooltipText: {
+    color: 'white',
+    fontFamily: Fonts.titilliumWebBold,
+    fontSize: 12,
+  },
+  selectionTooltipArrow: {
+    width: 0,
+    height: 0,
+    borderLeftWidth: 6,
+    borderRightWidth: 6,
+    borderTopWidth: 6,
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
+    borderTopColor: Colors.black,
+    position: 'absolute',
+    bottom: -6,
+  },
+  bottomSheet: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'white',
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
+    padding: 24,
+    paddingTop: 12,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: -10 },
+    shadowOpacity: 0.1,
+    shadowRadius: 20,
+    elevation: 24,
+  },
+  sheetHandle: {
+    alignSelf: 'center',
+    width: 40,
+    height: 5,
+    borderRadius: 2.5,
+    backgroundColor: '#E5E7EB',
+    marginBottom: 20,
+  },
+  sheetHeader: {
+    marginBottom: 24,
+  },
+  sheetTitle: {
+    fontFamily: Fonts.titilliumWebBold,
+    fontSize: 22,
+    color: Colors.black,
+    marginBottom: 4,
+  },
+  sheetSubtitle: {
+    fontFamily: Fonts.titilliumWeb,
+    fontSize: 14,
+    color: Colors.gray,
+    lineHeight: 20,
+  },
+  addressCard: {
+    backgroundColor: '#F9FAFB',
+    borderRadius: 20,
+    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    borderWidth: 1,
+    borderColor: '#F3F4F6',
+    marginBottom: 24,
+  },
+  addressIconCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'white',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+    marginRight: 16,
+  },
+  addressContent: {
+    flex: 1,
+  },
+  addressLabel: {
+    fontFamily: Fonts.titilliumWebBold,
+    fontSize: 12,
+    color: Colors.gray,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 4,
+  },
+  addressInput: {
+    fontFamily: Fonts.titilliumWebSemiBold,
+    fontSize: 16,
+    color: Colors.black,
+    padding: 0,
+    minHeight: 24,
+  },
+  loadingWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  loadingText: {
+    fontFamily: Fonts.titilliumWeb,
+    fontSize: 14,
+    color: Colors.gray,
+    marginLeft: 8,
+  },
+  confirmButton: {
+    backgroundColor: Colors.primary,
+    flexDirection: 'row',
+    height: 60,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  confirmButtonDisabled: {
+    backgroundColor: '#E5E7EB',
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  confirmButtonText: {
+    color: 'white',
+    fontFamily: Fonts.titilliumWebBold,
+    fontSize: 18,
+  },
 });

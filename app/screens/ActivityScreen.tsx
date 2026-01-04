@@ -134,12 +134,14 @@ export default function ActivityScreen() {
                 }
 
                 const json = await res.json().catch(() => null);
-                if (!Array.isArray(json)) {
+                const dataArray = Array.isArray(json) ? json : (json?.data || []);
+
+                if (!Array.isArray(dataArray)) {
                     setActivities([]);
                     return;
                 }
 
-                const mapped: ActivityItem[] = json.map((ride: any, idx: number) => {
+                const mapped: ActivityItem[] = dataArray.map((ride: any, idx: number) => {
                     const rawStatus = String(ride.status ?? '').toLowerCase();
                     let status: ActivityStatus = 'pending';
                     if (['pending', 'requested'].includes(rawStatus)) status = 'pending';
@@ -161,10 +163,10 @@ export default function ActivityScreen() {
                         ? ''
                         : d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
 
-                    const from = String(ride.origin_address ?? ride.pickup_address ?? 'Adresse de départ');
-                    const to = String(ride.destination_address ?? ride.dropoff_address ?? 'Adresse d’arrivée');
+                    const from = String(ride.pickup_address ?? ride.origin_address ?? 'Adresse de départ');
+                    const to = String(ride.dropoff_address ?? ride.destination_address ?? 'Adresse d’arrivée');
 
-                    const priceNumber = Number(ride.total_amount ?? ride.price ?? 0);
+                    const priceNumber = Number(ride.fare_amount ?? ride.total_amount ?? ride.price ?? 0);
                     const price = `${priceNumber.toLocaleString('fr-FR')} FCFA`;
 
                     return {
@@ -217,9 +219,23 @@ export default function ActivityScreen() {
                 data={filteredActivities}
                 keyExtractor={(item) => item.id}
                 renderItem={({ item }) => (
-                    <ActivityCard 
-                        item={item} 
-                        onPress={() => navigation.navigate("screens/ActivityDetailScreen", { activity: item })}
+                    <ActivityCard
+                        item={item}
+                        onPress={() => {
+                            if (item.status === 'pending') {
+                                router.push({
+                                    pathname: '/screens/ride/SearchingDriver',
+                                    params: { rideId: item.id }
+                                });
+                            } else if (item.status === 'ongoing') {
+                                router.push({
+                                    pathname: '/screens/ride/DriverTracking',
+                                    params: { rideId: item.id }
+                                });
+                            } else {
+                                navigation.navigate("screens/ActivityDetailScreen", { activity: item });
+                            }
+                        }}
                     />
                 )}
                 contentContainerStyle={styles.listContent}

@@ -2,7 +2,7 @@
 import React from "react";
 import { Stack } from "expo-router";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import FontProvider from "../providers/FontProvider"; // ajuste le chemin si besoin
+import FontProvider from "./providers/FontProvider";
 import { AuthProvider } from "./providers/AuthProvider";
 import { LocationProvider } from "./providers/LocationProvider";
 import { PaymentProvider } from "./providers/PaymentProvider";
@@ -64,7 +64,7 @@ declare global {
       "screens/ride/RideReceipt": { amount: number; distanceKm: number; vehicleName: string } | undefined;
       "screens/ride/History": undefined;
       "screens/ride/ContactDriver": { driverName?: string; vehicleName?: string } | undefined;
-      Splash: undefined;
+      index: undefined;
       "walkthrough/Walkthrough1": undefined;
       "walkthrough/Walkthrough2": undefined;
       "walkthrough/Walkthrough3": undefined;
@@ -84,13 +84,13 @@ export default function RootLayout() {
             <PaymentProvider>
               <LocationProvider>
                 <Stack
-                  initialRouteName="Splash"
+                  initialRouteName="index"
                   screenOptions={{
                     headerShown: false,
                     animation: "fade_from_bottom",
                   }}
                 >
-                  <Stack.Screen name="Splash" />
+                  <Stack.Screen name="index" />
                   <Stack.Screen name="walkthrough/Walkthrough1" />
                   <Stack.Screen name="walkthrough/Walkthrough2" />
                   <Stack.Screen name="walkthrough/Walkthrough3" />
@@ -128,6 +128,7 @@ export default function RootLayout() {
                   <Stack.Screen name="screens/ride/RideSummary" options={{ headerShown: false }} />
                   <Stack.Screen name="screens/ride/SearchingDriver" options={{ headerShown: false }} />
                   <Stack.Screen name="screens/ride/OngoingRide" options={{ headerShown: false }} />
+                  <Stack.Screen name="screens/ride/RideConsumption" options={{ headerShown: true, title: "Suivi de consommation" }} />
                   <Stack.Screen name="screens/ride/RideReceipt" options={{ headerShown: false }} />
                   <Stack.Screen name="screens/ride/History" options={{ headerShown: true, title: "Historique des courses" }} />
                   <Stack.Screen name="screens/ride/ContactDriver" options={{ headerShown: true, title: "Contacter le chauffeur" }} />

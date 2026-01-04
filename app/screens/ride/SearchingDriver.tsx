@@ -1,8 +1,7 @@
 // screens/ride/SearchingDriver.tsx
 import React, { useEffect, useState } from 'react';
-import { SafeAreaView, StyleSheet, Text, View, TouchableOpacity, Alert } from 'react-native';
-import { useNavigation } from 'expo-router';
-import { useRoute, type RouteProp } from '@react-navigation/native';
+import { SafeAreaView, StyleSheet, Text, View, TouchableOpacity, Alert, Dimensions, Image } from 'react-native';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { MapPlaceholder } from '../../components/MapPlaceholder';
 
 // Tentative d'importation sécurisée de Mapbox
@@ -22,11 +21,22 @@ try {
 } catch (e) {
   Mapbox = null;
 }
-import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming, Easing } from 'react-native-reanimated';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withRepeat,
+  withTiming,
+  withSequence,
+  withDelay,
+  Easing,
+  interpolate,
+  useDerivedValue
+} from 'react-native-reanimated';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Colors } from '../../theme';
 import { Fonts } from '../../font';
 import { useLocationStore } from '../../providers/LocationProvider';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getPusherClient, unsubscribeChannel } from '../../services/pusherClient';
 
@@ -34,55 +44,162 @@ if (Mapbox) {
   Mapbox.setAccessToken(process.env.EXPO_PUBLIC_MAPBOX_TOKEN || '');
 }
 
-type RootParams = {
-  'screens/ride/SearchingDriver': {
-    origin: { address: string; lat: number; lon: number };
-    destination: { address: string; lat: number; lon: number };
-    priceEstimate: number | null;
-    method: any;
-    serviceType?: string | null;
-    rideId?: number;
-    vehicleName?: string;
-  } | undefined;
-};
+const { width, height } = Dimensions.get('window');
 
-// Onde animée
-const Pulse = ({ delay }: { delay: number }) => {
-  const opacity = useSharedValue(0.6);
-  const scale = useSharedValue(1);
+// Composant Pulse amélioré avec dégradé
+const EnhancedPulse = ({ delay, color }: { delay: number; color: string }) => {
+  const progress = useSharedValue(0);
 
   useEffect(() => {
-    const anim = withRepeat(
-      withTiming(1, { duration: 2400, easing: Easing.out(Easing.quad) }),
-      -1,
-      false
-    );
-
-    const t = setTimeout(() => {
-      scale.value = anim;
-      opacity.value = withRepeat(withTiming(0, { duration: 2400 }), -1, false);
+    const timeout = setTimeout(() => {
+      progress.value = withRepeat(
+        withTiming(1, { duration: 2800, easing: Easing.out(Easing.cubic) }),
+        -1,
+        false
+      );
     }, delay);
-
-    return () => clearTimeout(t);
+    return () => clearTimeout(timeout);
   }, []);
 
-  const style = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value * 4.2 }],
-    opacity: opacity.value,
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: interpolate(progress.value, [0, 1], [0.3, 4.5]) }],
+    opacity: interpolate(progress.value, [0, 0.4, 1], [0.8, 0.4, 0]),
   }));
 
-  return <Animated.View style={[styles.pulse, style]} />;
+  return (
+    <Animated.View style={[styles.pulse, animatedStyle]}>
+      <LinearGradient
+        colors={[color, 'transparent']}
+        style={styles.pulseGradient}
+        start={{ x: 0.5, y: 0.5 }}
+        end={{ x: 1, y: 1 }}
+      />
+    </Animated.View>
+  );
+};
+
+// Indicateur de recherche avec dots animés
+const SearchingDots = () => {
+  const dot1 = useSharedValue(0);
+  const dot2 = useSharedValue(0);
+  const dot3 = useSharedValue(0);
+
+  useEffect(() => {
+    dot1.value = withRepeat(withSequence(
+      withTiming(1, { duration: 400 }),
+      withTiming(0, { duration: 400 })
+    ), -1, false);
+    dot2.value = withDelay(200, withRepeat(withSequence(
+      withTiming(1, { duration: 400 }),
+      withTiming(0, { duration: 400 })
+    ), -1, false));
+    dot3.value = withDelay(400, withRepeat(withSequence(
+      withTiming(1, { duration: 400 }),
+      withTiming(0, { duration: 400 })
+    ), -1, false));
+  }, []);
+
+  const style1 = useAnimatedStyle(() => ({ opacity: interpolate(dot1.value, [0, 1], [0.3, 1]) }));
+  const style2 = useAnimatedStyle(() => ({ opacity: interpolate(dot2.value, [0, 1], [0.3, 1]) }));
+  const style3 = useAnimatedStyle(() => ({ opacity: interpolate(dot3.value, [0, 1], [0.3, 1]) }));
+
+  return (
+    <View style={styles.dotsContainer}>
+      <Animated.View style={[styles.dot, style1]} />
+      <Animated.View style={[styles.dot, style2]} />
+      <Animated.View style={[styles.dot, style3]} />
+    </View>
+  );
+};
+
+// Timer de recherche
+const SearchTimer = () => {
+  const [seconds, setSeconds] = useState(0);
+
+  useEffect(() => {
+    const interval = setInterval(() => setSeconds(s => s + 1), 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  const formatted = `${mins}:${secs.toString().padStart(2, '0')}`;
+
+  return (
+    <View style={styles.timerContainer}>
+      <Ionicons name="time-outline" size={16} color="rgba(255,255,255,0.7)" />
+      <Text style={styles.timerText}>{formatted}</Text>
+    </View>
+  );
 };
 
 export default function SearchingDriver() {
-  const navigation = useNavigation();
-  const route = useRoute<RouteProp<RootParams, 'screens/ride/SearchingDriver'>>();
-  const { origin } = useLocationStore();
-  const vehicleName = route.params?.vehicleName || 'Standard';
-  const rideId = route.params?.rideId;
-
+  const router = useRouter();
+  const params = useLocalSearchParams<{ rideId?: string; vehicleName?: string; price?: string }>();
+  const { origin, destination, setOrigin, setDestination } = useLocationStore();
+  const vehicleName = params.vehicleName || 'Standard';
+  const rideId = params.rideId ? Number(params.rideId) : undefined;
+  const price = params.price ? Number(params.price) : null;
   const API_URL = process.env.EXPO_PUBLIC_API_URL;
   const [assignmentReceived, setAssignmentReceived] = useState(false);
+  const [loadingDetails, setLoadingDetails] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+
+  // Recovery logic: if we don't have origin/destination, fetch them from the ride
+  useEffect(() => {
+    if (!rideId || !API_URL) return;
+    if (origin && destination) return; // Already have them
+
+    const fetchRideDetails = async () => {
+      try {
+        setLoadingDetails(true);
+        const token = await AsyncStorage.getItem('authToken');
+        const res = await fetch(`${API_URL}/passenger/rides/${rideId}`, {
+          headers: {
+            Accept: 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+        });
+        if (!res.ok) return;
+        const json = await res.json();
+
+        if (json?.pickup_address && json?.dropoff_address) {
+          setOrigin({
+            address: json.pickup_address,
+            lat: Number(json.pickup_lat),
+            lon: Number(json.pickup_lng),
+          });
+          setDestination({
+            address: json.dropoff_address,
+            lat: Number(json.dropoff_lat),
+            lon: Number(json.dropoff_lng),
+          });
+        }
+      } catch (e) {
+        console.warn("Failed to recover ride details", e);
+      } finally {
+        setLoadingDetails(false);
+      }
+    };
+    fetchRideDetails();
+  }, [rideId, API_URL]);
+
+  // Animation du bouton
+  const buttonScale = useSharedValue(1);
+  const buttonStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: buttonScale.value }]
+  }));
+
+  const handleCancel = async () => {
+    if (!rideId) {
+      router.back();
+      return;
+    }
+    router.push({
+      pathname: '/screens/ride/CancelReason',
+      params: { rideId: String(rideId) }
+    });
+  };
 
   useEffect(() => {
     let channel: any = null;
@@ -107,14 +224,20 @@ export default function SearchingDriver() {
             return;
           }
           setAssignmentReceived(true);
-          navigation.navigate({
-            name: 'screens/ride/DriverTracking',
+          router.replace({
+            pathname: '/screens/ride/DriverTracking',
             params: {
               vehicleName,
-              rideId: payloadRideId ?? rideId,
-              driver: payload?.driver,
+              rideId: String(payloadRideId ?? rideId),
+              driver: JSON.stringify(payload?.driver),
             },
-          } as never);
+          });
+        });
+
+        channel.bind('ride.cancelled', (payload: any) => {
+          if (cancelled) return;
+          Alert.alert('Course annulée', 'Votre demande de course a été annulée.');
+          router.replace('/(tabs)');
         });
       } catch (error) {
         console.warn('Realtime subscription failed', error);
@@ -127,7 +250,7 @@ export default function SearchingDriver() {
       cancelled = true;
       unsubscribeChannel(channel);
     };
-  }, [rideId, navigation, vehicleName]);
+  }, [rideId, router, vehicleName]);
 
   useEffect(() => {
     if (!rideId || !API_URL || assignmentReceived) return;
@@ -152,24 +275,14 @@ export default function SearchingDriver() {
 
           if (res.status === 200) {
             setAssignmentReceived(true);
-            navigation.navigate({
-              name: 'screens/ride/DriverTracking',
-              params: { vehicleName, rideId },
-            } as never);
+            router.replace({
+              pathname: '/screens/ride/DriverTracking',
+              params: { vehicleName, rideId: String(rideId) },
+            });
             return;
-          }
-
-          if (res.status !== 204) {
-            // Retry or just continue
-            // Alert.alert('Erreur', 'Impossible de trouver un chauffeur. Veuillez réessayer.');
-            // navigation.goBack();
-            // return;
           }
         } catch (error: any) {
-          if (error?.name === 'AbortError') {
-            return;
-          }
-          // Ignore connection lost, loop will retry
+          if (error?.name === 'AbortError') return;
         }
       }
     };
@@ -180,12 +293,11 @@ export default function SearchingDriver() {
       cancelled = true;
       abortController?.abort();
     };
-  }, [API_URL, rideId, navigation, vehicleName, assignmentReceived]);
+  }, [API_URL, rideId, router, vehicleName, assignmentReceived]);
 
   return (
     <View style={styles.container}>
-
-      {/* Carte */}
+      {/* Carte en arrière-plan */}
       {origin && (
         Mapbox ? (
           <MapView
@@ -200,7 +312,7 @@ export default function SearchingDriver() {
             <Camera
               defaultSettings={{
                 centerCoordinate: [origin.lon, origin.lat],
-                zoomLevel: 14
+                zoomLevel: 15
               }}
             />
           </MapView>
@@ -209,37 +321,97 @@ export default function SearchingDriver() {
         )
       )}
 
-      {/* Overlay sombre + blur visuel */}
-      <View style={styles.overlay} />
+      {/* Overlay avec dégradé Orange vers Blanc */}
+      <LinearGradient
+        colors={['rgba(255,123,0,0.4)', 'rgba(255,255,255,0.8)', 'rgba(255,255,255,1)']}
+        locations={[0, 0.6, 1]}
+        style={StyleSheet.absoluteFill}
+      />
 
-      {/* Effet radar */}
+      {/* Effet radar amélioré en Orange */}
       <View style={styles.pulseContainer}>
-        <Pulse delay={0} />
-        <Pulse delay={800} />
-        <Pulse delay={1600} />
-        <View style={styles.pulseCenter} />
+        <EnhancedPulse delay={0} color={Colors.secondary + '60'} />
+        <EnhancedPulse delay={700} color={Colors.secondary + '50'} />
+        <EnhancedPulse delay={1400} color={Colors.secondary + '40'} />
+
+        {/* Centre avec icône véhicule */}
+        <View style={styles.pulseCenterOuter}>
+          <LinearGradient
+            colors={[Colors.secondary, '#FF9D00']}
+            style={styles.pulseCenterInner}
+          >
+            <MaterialCommunityIcons name="car-connected" size={28} color="#fff" />
+          </LinearGradient>
+        </View>
       </View>
 
-      {/* Textes */}
-      <View style={styles.textBlock}>
-        <Text style={styles.title}>Recherche du chauffeur</Text>
-        <Text style={styles.subtitle}>
-          Nous contactons les chauffeurs proches pour votre trajet en{' '}
-          <Text style={styles.vehicle}>{vehicleName}</Text>.
-        </Text>
+      {/* Timer en haut */}
+      <SafeAreaView style={styles.topBar}>
+        <SearchTimer />
+      </SafeAreaView>
+
+      {/* Carte glassmorphic avec infos */}
+      <View style={styles.infoCardWrapper}>
+        <View style={styles.infoCard}>
+          <View style={styles.infoHeader}>
+            <View style={styles.searchingBadge}>
+              <SearchingDots />
+              <Text style={styles.searchingText}>Recherche TIC</Text>
+            </View>
+          </View>
+
+          {/* Détails du trajet */}
+          <View style={styles.routeDetails}>
+            <View style={styles.routePoint}>
+              <View style={[styles.routeDot, { backgroundColor: '#22c55e' }]} />
+              <Text style={styles.routeAddress} numberOfLines={1}>
+                {origin?.address || 'Point de départ'}
+              </Text>
+            </View>
+            <View style={styles.routeLine} />
+            <View style={styles.routePoint}>
+              <View style={[styles.routeDot, { backgroundColor: Colors.primary }]} />
+              <Text style={styles.routeAddress} numberOfLines={1}>
+                {destination?.address || 'Destination'}
+              </Text>
+            </View>
+          </View>
+
+          {/* Véhicule et prix */}
+          <View style={styles.rideMetaRow}>
+            <View style={styles.metaItem}>
+              <MaterialCommunityIcons name="car" size={20} color="rgba(255,255,255,0.7)" />
+              <Text style={styles.metaText}>{vehicleName}</Text>
+            </View>
+            {price && (
+              <View style={styles.metaItem}>
+                <Text style={styles.priceText}>{price.toLocaleString('fr-FR')} FCFA</Text>
+              </View>
+            )}
+          </View>
+        </View>
       </View>
 
       {/* Bouton Annuler */}
       <SafeAreaView style={styles.footer}>
-        <TouchableOpacity
-          style={styles.cancelButton}
-          onPress={() => navigation.goBack()}
-        >
-          <Ionicons name="close" size={22} color="#000" />
-          <Text style={styles.cancelText}>Annuler</Text>
-        </TouchableOpacity>
-      </SafeAreaView>
+        <Animated.View style={buttonStyle}>
+          <TouchableOpacity
+            style={styles.cancelButton}
+            onPress={handleCancel}
+            disabled={cancelling}
+            onPressIn={() => { buttonScale.value = withTiming(0.96, { duration: 100 }); }}
+            onPressOut={() => { buttonScale.value = withTiming(1, { duration: 100 }); }}
+            activeOpacity={0.9}
+          >
+            <Ionicons name="close-circle-outline" size={24} color="#ef4444" />
+            <Text style={styles.cancelText}>{cancelling ? 'Annulation...' : 'Annuler la recherche'}</Text>
+          </TouchableOpacity>
+        </Animated.View>
 
+        <Text style={styles.footerHint}>
+          Nous vous préviendrons dès qu'un chauffeur accepte
+        </Text>
+      </SafeAreaView>
     </View>
   );
 }
@@ -250,71 +422,191 @@ const styles = StyleSheet.create({
     backgroundColor: '#0a0a0a',
   },
 
-  overlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.65)',
+  topBar: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    paddingTop: 60,
+    alignItems: 'center',
+  },
+
+  timerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.05)',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    gap: 6,
+  },
+
+  timerText: {
+    fontFamily: Fonts.titilliumWebBold,
+    fontSize: 14,
+    color: Colors.black,
+    fontVariant: ['tabular-nums'],
   },
 
   pulseContainer: {
     position: 'absolute',
-    top: '33%',
-    width: 200,
-    height: 200,
+    top: height * 0.22,
+    alignSelf: 'center',
+    width: 220,
+    height: 220,
     justifyContent: 'center',
     alignItems: 'center',
   },
 
   pulse: {
     position: 'absolute',
-    width: 50,
-    height: 50,
+    width: 60,
+    height: 60,
     borderRadius: 30,
-    backgroundColor: `${Colors.primary}40`,
-    borderWidth: 1.2,
-    borderColor: Colors.primary,
   },
 
-  pulseCenter: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: Colors.white,
-    elevation: 5,
+  pulseGradient: {
+    flex: 1,
+    borderRadius: 30,
+    borderWidth: 2,
+    borderColor: Colors.primary + '40',
   },
 
-  textBlock: {
-    position: 'absolute',
-    top: '52%',
-    width: '100%',
-    paddingHorizontal: 30,
+  pulseCenterOuter: {
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    justifyContent: 'center',
     alignItems: 'center',
   },
 
-  title: {
-    fontFamily: Fonts.titilliumWebBold,
-    fontSize: 26,
-    color: Colors.white,
-    textAlign: 'center',
-    marginBottom: 12,
+  pulseCenterInner: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.5,
+    shadowRadius: 12,
+    elevation: 8,
   },
 
-  subtitle: {
+  infoCardWrapper: {
+    position: 'absolute',
+    bottom: 180,
+    left: 20,
+    right: 20,
+  },
+
+  infoCard: {
+    borderRadius: 24,
+    padding: 20,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.05)',
+    backgroundColor: 'rgba(255,255,255,0.9)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.1,
+    shadowRadius: 20,
+    elevation: 5,
+  },
+
+  infoHeader: {
+    marginBottom: 16,
+  },
+
+  searchingBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+
+  dotsContainer: {
+    flexDirection: 'row',
+    gap: 4,
+  },
+
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: Colors.secondary,
+  },
+
+  searchingText: {
+    fontFamily: Fonts.titilliumWebBold,
+    fontSize: 18,
+    color: Colors.black,
+  },
+
+  routeDetails: {
+    marginBottom: 16,
+  },
+
+  routePoint: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+
+  routeDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+  },
+
+  routeAddress: {
     fontFamily: Fonts.titilliumWeb,
-    fontSize: 16,
-    color: '#d7d7d7',
-    textAlign: 'center',
-    lineHeight: 24,
+    fontSize: 15,
+    color: Colors.black,
+    flex: 1,
   },
 
-  vehicle: {
+  routeLine: {
+    width: 2,
+    height: 20,
+    backgroundColor: 'rgba(0,0,0,0.1)',
+    marginLeft: 5,
+    marginVertical: 4,
+  },
+
+  rideMetaRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(0,0,0,0.05)',
+  },
+
+  metaItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+
+  metaText: {
+    fontFamily: Fonts.titilliumWebSemiBold,
+    fontSize: 15,
+    color: Colors.gray,
+  },
+
+  priceText: {
     fontFamily: Fonts.titilliumWebBold,
-    color: Colors.white,
+    fontSize: 18,
+    color: '#22c55e',
   },
 
   footer: {
     position: 'absolute',
-    bottom: 100,
-    width: '100%',
+    bottom: 40,
+    left: 0,
+    right: 0,
+    paddingHorizontal: 20,
   },
 
   cancelButton: {
@@ -322,18 +614,24 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: Colors.white,
-    marginHorizontal: 24,
     paddingVertical: 16,
-    borderRadius: 14,
-    shadowColor: '#fff',
-    shadowOpacity: 0.2,
-    shadowOffset: { width: 0, height: 4 },
+    borderRadius: 16,
+    gap: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(239,68,68,0.3)',
   },
 
   cancelText: {
     fontFamily: Fonts.titilliumWebBold,
     fontSize: 16,
-    color: '#000',
-    marginLeft: 6,
+    color: '#ef4444',
+  },
+
+  footerHint: {
+    fontFamily: Fonts.titilliumWeb,
+    fontSize: 13,
+    color: Colors.gray,
+    textAlign: 'center',
+    marginTop: 12,
   },
 });

@@ -145,11 +145,13 @@ export default function OTPVerification() {
 
         // Success: Sign in via provider
         await signIn(token, user || json.user);
+
         // Navigation is handled by AuthProvider's useEffect or we can force it
-        // router.replace('/');
+        router.replace('/(tabs)');
       } else {
         // Fallback: trust the initial user object if /me failed but token is valid
         await signIn(token, json.user);
+        router.replace('/(tabs)');
       }
 
     } catch (e: any) {

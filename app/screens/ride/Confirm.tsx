@@ -1,15 +1,40 @@
 // screens/ride/Confirm.tsx
-import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator, SafeAreaView, ScrollView } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator, SafeAreaView, ScrollView, Dimensions } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ExpoLocation from 'expo-location';
-import { useNavigation } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Colors } from '../../theme';
 import { Fonts } from '../../font';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useLocationStore } from '../../providers/LocationProvider';
 import { usePaymentStore } from '../../providers/PaymentProvider';
 import { useServiceStore } from '../../providers/ServiceProvider';
+import BottomSheet, { BottomSheetView, BottomSheetScrollView } from '@gorhom/bottom-sheet';
+
+// Tentative d'importation sécurisée de Mapbox
+let Mapbox: any = null;
+let MapView: any = View;
+let Camera: any = View;
+let PointAnnotation: any = View;
+let ShapeSource: any = View;
+let LineLayer: any = View;
+
+try {
+  const MB = require('@rnmapbox/maps');
+  Mapbox = MB.default || MB;
+  MapView = MB.MapView;
+  Camera = MB.Camera;
+  PointAnnotation = MB.PointAnnotation;
+  ShapeSource = MB.ShapeSource;
+  LineLayer = MB.LineLayer;
+
+  if (Mapbox) {
+    Mapbox.setAccessToken(process.env.EXPO_PUBLIC_MAPBOX_TOKEN || '');
+  }
+} catch (e) {
+  Mapbox = null;
+}
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
 const reverseBackend = async (lat: number, lon: number): Promise<string | null> => {
@@ -42,7 +67,8 @@ const truncateWords = (text: string | undefined | null, maxWords: number): strin
 };
 
 export default function ConfirmRide() {
-  const navigation = useNavigation();
+  const router = useRouter();
+  const { passengerName, passengerPhone } = useLocalSearchParams();
   const { origin, destination, setOrigin, requestUserLocation } = useLocationStore();
   const { method } = usePaymentStore();
   const { serviceType } = useServiceStore();
@@ -51,7 +77,14 @@ export default function ConfirmRide() {
   const [priceEstimate, setPriceEstimate] = useState<number | null>(null);
   const [distanceMeters, setDistanceMeters] = useState<number | null>(null);
   const [durationSeconds, setDurationSeconds] = useState<number | null>(null);
+  const [vehicleType, setVehicleType] = useState<'standard' | 'vip'>('standard');
+  const [hasBaggage, setHasBaggage] = useState(false);
+  const [routeGeometry, setRouteGeometry] = useState<any | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  const bottomSheetRef = useRef<BottomSheet>(null);
+  const snapPoints = ['15%', '50%', '90%'];
+  const cameraRef = useRef<any>(null);
 
   // Logique pour s'assurer que l'origine est définie
   useEffect(() => {
@@ -64,7 +97,7 @@ export default function ConfirmRide() {
         const place = await requestUserLocation('origin');
         if (!place) {
           // Alert already shown by provider
-          navigation.goBack();
+          router.back();
           return;
         }
 
@@ -75,49 +108,98 @@ export default function ConfirmRide() {
         }
       } catch (error) {
         Alert.alert("Erreur", "Impossible de récupérer votre position.");
-        navigation.goBack();
+        router.back();
       } finally {
         setIsLoading(false);
       }
     };
     ensureOrigin();
-  }, [origin, setOrigin, navigation]);
+  }, [origin, setOrigin, router]);
 
   // Logique pour calculer le prix
   useEffect(() => {
     if (!origin || !destination) return;
     const calculatePrice = async () => {
       try {
-        if (!API_URL) return;
+        if (!API_URL) {
+          console.warn("⚠️ API_URL is missing in .env");
+          return;
+        }
+        console.log(`📡 Fetching estimate from: ${API_URL}/routing/estimate`);
         const res = await fetch(`${API_URL}/routing/estimate`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             pickup: { lat: origin.lat, lng: origin.lon },
             dropoff: { lat: destination.lat, lng: destination.lon },
+            vehicle_type: vehicleType,
           }),
         });
-        if (!res.ok) return;
+
+        if (!res.ok) {
+          const errorText = await res.text();
+          console.error(`❌ Estimate API error (${res.status}):`, errorText);
+          setPriceEstimate(-1); // Signal error
+          return;
+        }
+
         const data = await res.json();
+        console.log("✅ Estimate received:", data);
         const serverPrice = data?.price as number | undefined;
         if (typeof serverPrice === 'number') {
           setPriceEstimate(serverPrice);
+        } else {
+          console.warn("⚠️ Price not found in response data");
+          setPriceEstimate(-1);
         }
+
         if (typeof data?.distance_m === 'number') {
           setDistanceMeters(data.distance_m);
         }
-        if (typeof data?.duration_s === 'number') {
-          setDurationSeconds(data.duration_s);
+        if (typeof data?.eta_s === 'number') {
+          setDurationSeconds(data.eta_s);
         }
-      } catch { }
+        if (data?.geometry) {
+          setRouteGeometry(data.geometry);
+        } else {
+          console.warn("⚠️ No geometry in estimate response");
+          setRouteGeometry(null);
+        }
+      } catch (err) {
+        console.error("❌ Network error fetching estimate:", err);
+        setPriceEstimate(-1);
+      }
     };
     calculatePrice();
-  }, [origin, destination, serviceType]);
+  }, [origin, destination, vehicleType]);
 
   const paymentLabel = (m: ReturnType<typeof usePaymentStore>['method']) => {
     const labels = { cash: 'Espèces', mobile_money: 'Mobile Money', card: 'Carte', wallet: 'Portefeuille', qr: 'QR Code' };
     return labels[m] || String(m);
   };
+
+  const { height: SCREEN_HEIGHT } = Dimensions.get('window');
+  const MAP_BOTTOM_PADDING = SCREEN_HEIGHT * 0.45;
+
+  // Fit bounds when geometry is available
+  useEffect(() => {
+    if (origin?.lon && destination?.lon && cameraRef.current) {
+      console.log("📸 Fitting camera to markers...");
+      setTimeout(() => {
+        cameraRef.current.setCamera({
+          bounds: {
+            ne: [Math.max(Number(origin.lon), Number(destination.lon)), Math.max(Number(origin.lat), Number(destination.lat))],
+            sw: [Math.min(Number(origin.lon), Number(destination.lon)), Math.min(Number(origin.lat), Number(destination.lat))],
+            paddingBottom: MAP_BOTTOM_PADDING + 80,
+            paddingTop: 100,
+            paddingLeft: 50,
+            paddingRight: 50,
+          },
+          animationDuration: 2000,
+        });
+      }, 800);
+    }
+  }, [origin, destination]); // Trigger on coords even without geometry
 
   if (isLoading || !origin || !destination) {
     return (
@@ -130,134 +212,290 @@ export default function ConfirmRide() {
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+      {/* Map Section - Background */}
+      <View style={styles.mapBackground}>
+        {Mapbox ? (
+          <MapView
+            style={StyleSheet.absoluteFill}
+            attributionEnabled={false}
+            logoEnabled={false}
+          >
+            <Camera
+              ref={cameraRef}
+              centerCoordinate={[origin.lon, origin.lat]}
+              zoomLevel={12}
+              padding={{ paddingBottom: MAP_BOTTOM_PADDING }}
+            />
+
+            {/* Fallback straight line if routing failed */}
+            {!routeGeometry && origin && destination && (
+              <ShapeSource
+                id="straightLineSource"
+                shape={{
+                  type: 'Feature',
+                  geometry: {
+                    type: 'LineString',
+                    coordinates: [[origin.lon, origin.lat], [destination.lon, destination.lat]]
+                  },
+                  properties: {}
+                }}
+              >
+                <LineLayer
+                  id="straightLineLayer"
+                  style={{
+                    lineColor: Colors.gray,
+                    lineWidth: 3,
+                    lineDasharray: [2, 2],
+                    lineJoin: 'round',
+                    lineCap: 'round',
+                  }}
+                />
+              </ShapeSource>
+            )}
+
+            {/* Itinerary Route */}
+            {routeGeometry && (
+              <ShapeSource
+                id="routeSource"
+                shape={{
+                  type: 'Feature',
+                  geometry: routeGeometry,
+                  properties: {}
+                }}
+              >
+                <LineLayer
+                  id="routeLayerBackground"
+                  style={{
+                    lineColor: Colors.primary,
+                    lineWidth: 12,
+                    lineOpacity: 0.15,
+                    lineJoin: 'round',
+                    lineCap: 'round',
+                  }}
+                />
+                <LineLayer
+                  id="routeLayer"
+                  style={{
+                    lineColor: Colors.primary,
+                    lineWidth: 6,
+                    lineJoin: 'round',
+                    lineCap: 'round',
+                  }}
+                />
+              </ShapeSource>
+            )}
+
+            {/* Origin Marker */}
+            <PointAnnotation id="origin" coordinate={[origin.lon, origin.lat]}>
+              <View style={styles.originMarker}>
+                <View style={styles.originDot} />
+              </View>
+            </PointAnnotation>
+
+            {/* Destination Marker */}
+            <PointAnnotation id="destination" coordinate={[destination.lon, destination.lat]}>
+              <View style={styles.destinationMarker}>
+                <View style={styles.destinationDot} />
+              </View>
+            </PointAnnotation>
+          </MapView>
+        ) : (
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: '#e5e7eb', justifyContent: 'center', alignItems: 'center' }]}>
+            <Text style={{ fontFamily: Fonts.titilliumWebBold }}>Carte non disponible</Text>
+          </View>
+        )}
+
+        <TouchableOpacity style={styles.floatingBackButton} onPress={() => router.back()}>
           <Ionicons name="arrow-back" size={24} color={Colors.black} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Récapitulatif</Text>
-        <View style={{ width: 44 }} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {/* Carte de Trajet */}
-        <View style={styles.card}>
-          <View style={styles.locationRow}>
-            <View style={styles.locationDotContainer}>
-              <View style={[styles.dot, { backgroundColor: Colors.primary }]} />
-            </View>
-            <View style={styles.locationTextContainer}>
-              <Text style={styles.locationLabel}>Départ</Text>
-              <Text style={styles.locationAddress} numberOfLines={2}>{truncateWords(origin.address, 8)}</Text>
-            </View>
-          </View>
-          <View style={styles.line} />
-          <View style={styles.locationRow}>
-            <View style={styles.locationDotContainer}>
-              <View style={[styles.dot, { backgroundColor: Colors.secondary }]} />
-            </View>
-            <View style={styles.locationTextContainer}>
-              <Text style={styles.locationLabel}>Destination</Text>
-              <Text style={styles.locationAddress} numberOfLines={2}>{truncateWords(destination.address, 8)}</Text>
-            </View>
-          </View>
-        </View>
+      <BottomSheet
+        ref={bottomSheetRef}
+        index={1}
+        snapPoints={snapPoints}
+        enablePanDownToClose={false}
+        handleIndicatorStyle={styles.sheetIndicator}
+        backgroundStyle={styles.sheetBackground}
+      >
+        <BottomSheetScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+          <Text style={styles.sheetTitle}>Récapitulatif de votre course</Text>
 
-        {/* Carte de Service */}
-        <View style={styles.card}>
-          <View style={styles.serviceHeader}>
+          {/* Trajet Court */}
+          <View style={styles.routeSummaryCard}>
+            <View style={styles.routeSummaryRow}>
+              <View style={[styles.dot, { backgroundColor: Colors.primary }]} />
+              <Text style={styles.summaryAddress} numberOfLines={1}>{origin.address}</Text>
+            </View>
+            <View style={styles.lineSmall} />
+            <View style={styles.routeSummaryRow}>
+              <View style={[styles.dot, { backgroundColor: Colors.secondary }]} />
+              <Text style={styles.summaryAddress} numberOfLines={1}>{destination.address}</Text>
+            </View>
+          </View>
+
+          {/* Sélection du Véhicule */}
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Type de véhicule</Text>
+            {distanceMeters && (
+              <View style={styles.distanceBadge}>
+                <Ionicons name="navigate" size={12} color={Colors.primary} />
+                <Text style={styles.distanceText}>{(distanceMeters / 1000).toFixed(1)} km</Text>
+              </View>
+            )}
+          </View>
+
+          <View style={styles.vehicleSelectionContainer}>
+            <TouchableOpacity
+              style={[styles.vehicleCard, vehicleType === 'standard' && styles.activeVehicleCard]}
+              onPress={() => setVehicleType('standard')}
+            >
+              <View style={[styles.vehicleIconCircle, vehicleType === 'standard' && styles.activeIconCircle]}>
+                <MaterialCommunityIcons
+                  name="car-side"
+                  size={32}
+                  color={vehicleType === 'standard' ? Colors.white : Colors.primary}
+                />
+              </View>
+              <Text style={[styles.vehicleCardName, vehicleType === 'standard' && styles.activeCardText]}>Standard</Text>
+              <Text style={[styles.vehicleCardPrice, vehicleType === 'standard' && styles.activeCardText]}>
+                {priceEstimate === -1 ? 'Erreur' : (priceEstimate ?
+                  (vehicleType === 'standard' ? priceEstimate : Math.round(priceEstimate / 1.5)).toLocaleString('fr-FR') + ' F'
+                  : '...')
+                }
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.vehicleCard, vehicleType === 'vip' && styles.activeVehicleCard]}
+              onPress={() => setVehicleType('vip')}
+            >
+              <View style={[styles.vehicleIconCircle, vehicleType === 'vip' && styles.activeIconCircle, { backgroundColor: vehicleType === 'vip' ? Colors.primary : '#fef3c7' }]}>
+                <MaterialCommunityIcons
+                  name="car-estate"
+                  size={32}
+                  color={vehicleType === 'vip' ? Colors.white : '#b45309'}
+                />
+              </View>
+              <Text style={[styles.vehicleCardName, vehicleType === 'vip' && styles.activeCardText]}>VIP</Text>
+              <Text style={[styles.vehicleCardPrice, vehicleType === 'vip' && styles.activeCardText]}>
+                {priceEstimate === -1 ? 'Erreur' : (priceEstimate ?
+                  (vehicleType === 'vip' ? priceEstimate : Math.round(priceEstimate * 1.5)).toLocaleString('fr-FR') + ' F'
+                  : '...')
+                }
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Paiement */}
+          <TouchableOpacity style={styles.optionCard} onPress={() => router.push('/screens/payment/PaymentOptions')}>
             <View style={styles.optionRow}>
               <View style={styles.optionIcon}>
-                <MaterialCommunityIcons name="car-clock" size={24} color={Colors.primary} />
+                <Ionicons name="card-outline" size={22} color={Colors.primary} />
               </View>
               <View style={styles.optionTextContainer}>
-                <Text style={styles.optionTitle}>Standard</Text>
-                <Text style={styles.optionSubtitle}>Arrivée dans ~5 min</Text>
+                <Text style={styles.optionLabel}>Mode de paiement</Text>
+                <Text style={styles.optionValue}>{paymentLabel(method)}</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={Colors.gray} />
+            </View>
+          </TouchableOpacity>
+
+          {/* Option bagages en dernier */}
+          <TouchableOpacity style={styles.optionCard} onPress={() => setHasBaggage(!hasBaggage)}>
+            <View style={styles.optionRow}>
+              <View style={styles.optionIcon}>
+                <MaterialCommunityIcons name="bag-personal" size={22} color={Colors.primary} />
+              </View>
+              <View style={styles.optionTextContainer}>
+                <Text style={styles.optionLabel}>Bagages</Text>
+                <Text style={styles.optionValue}>{hasBaggage ? 'Souhaitez-vous emmener des bagages ? Oui' : 'Pas de bagages'}</Text>
+              </View>
+              <View style={[styles.checkbox, hasBaggage && styles.checkboxChecked]}>
+                {hasBaggage && <Ionicons name="checkmark" size={16} color="white" />}
               </View>
             </View>
-          </View>
-          <View style={styles.priceContainer}>
-            <Text style={styles.priceLabel}>Prix estimé</Text>
-            <Text style={styles.priceText}>
-              {priceEstimate ? `${priceEstimate.toLocaleString('fr-FR')} FCFA` : '...'}
-            </Text>
-          </View>
-        </View>
-
-        {/* Carte de Paiement */}
-        <View style={styles.card}>
-          <TouchableOpacity style={styles.paymentRow} onPress={() => (navigation as any).navigate('screens/payment/PaymentOptions')}>
-            <View style={styles.optionIcon}>
-              <Ionicons name="card-outline" size={24} color={Colors.primary} />
-            </View>
-            <View style={styles.optionTextContainer}>
-              <Text style={styles.optionTitle}>Paiement</Text>
-              <Text style={styles.optionSubtitle}>{paymentLabel(method)}</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={22} color={Colors.gray} />
           </TouchableOpacity>
-        </View>
-      </ScrollView>
 
-      {/* Footer avec le bouton de confirmation */}
-      <View style={styles.footer}>
-        <TouchableOpacity
-          style={styles.confirmButton}
-          disabled={submitting}
-          onPress={async () => {
-            if (!origin || !destination || !priceEstimate) {
-              Alert.alert('Erreur', 'Données de trajet manquantes.');
-              return;
-            }
+          <View style={styles.card}>
+            <View style={styles.priceContainer}>
+              <View>
+                <Text style={styles.priceLabel}>Prix total estimé</Text>
+                {vehicleType === 'vip' && <Text style={styles.vipTag}>Inclus: Service VIP (+50%)</Text>}
+              </View>
+              <Text style={styles.priceText}>
+                {priceEstimate === -1 ? 'Erreur de calcul' : (priceEstimate ? `${priceEstimate.toLocaleString('fr-FR')} FCFA` : '...')}
+              </Text>
+            </View>
+          </View>
 
-            if (!API_URL) {
-              Alert.alert('Erreur', 'API_URL non configurée.');
-              return;
-            }
-
-            try {
-              setSubmitting(true);
-              const token = await AsyncStorage.getItem('authToken');
-              const res = await fetch(`${API_URL}/trips/create`, {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  Accept: 'application/json',
-                  ...(token ? { Authorization: `Bearer ${token}` } : {}),
-                },
-                body: JSON.stringify({
-                  pickup: { lat: origin.lat, lng: origin.lon, label: origin.address },
-                  dropoff: { lat: destination.lat, lng: destination.lon, label: destination.address },
-                  distance_m: distanceMeters ?? 1000,
-                  duration_s: durationSeconds ?? 600,
-                  price: priceEstimate,
-                }),
-              });
-
-              const json = await res.json().catch(() => null);
-              if (!res.ok || !json || !json.id) {
-                Alert.alert('Erreur', json?.message || 'Impossible de créer la course.');
+          <TouchableOpacity
+            style={styles.confirmButton}
+            disabled={submitting}
+            onPress={async () => {
+              if (priceEstimate === -1) {
+                Alert.alert('Erreur', 'Impossible de calculer le prix. Vérifiez votre connexion.');
+                return;
+              }
+              if (!origin || !destination || !priceEstimate) {
+                Alert.alert('Erreur', 'Données de trajet manquantes.');
                 return;
               }
 
-              (navigation as any).navigate('screens/ride/SearchingDriver', {
-                origin,
-                destination,
-                priceEstimate,
-                method,
-                serviceType,
-                rideId: json.id,
-              });
-            } catch (e) {
-              Alert.alert('Erreur réseau', 'Impossible de contacter le serveur.');
-            } finally {
-              setSubmitting(false);
-            }
-          }}
-        >
-          <Text style={styles.confirmButtonText}>{submitting ? 'Création de la course...' : 'Confirmer la commande'}</Text>
-        </TouchableOpacity>
-      </View>
+              if (!API_URL) {
+                Alert.alert('Erreur', 'API_URL non configurée.');
+                return;
+              }
+
+              try {
+                setSubmitting(true);
+                const token = await AsyncStorage.getItem('authToken');
+                const res = await fetch(`${API_URL}/trips/create`, {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    Accept: 'application/json',
+                    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                  },
+                  body: JSON.stringify({
+                    pickup: { lat: origin.lat, lng: origin.lon, label: origin.address },
+                    dropoff: { lat: destination.lat, lng: destination.lon, label: destination.address },
+                    distance_m: distanceMeters ?? 1000,
+                    duration_s: durationSeconds ?? 600,
+                    price: priceEstimate,
+                    passenger_name: passengerName,
+                    passenger_phone: passengerPhone,
+                    vehicle_type: vehicleType,
+                    has_baggage: hasBaggage,
+                  }),
+                });
+
+                const json = await res.json().catch(() => null);
+                if (!res.ok || !json || !json.id) {
+                  Alert.alert('Erreur', json?.message || 'Impossible de créer la course.');
+                  return;
+                }
+
+                router.replace({
+                  pathname: '/screens/ride/SearchingDriver',
+                  params: {
+                    rideId: String(json.id),
+                    vehicleName: vehicleType === 'vip' ? 'VIP' : 'Standard',
+                  }
+                });
+              } catch (e) {
+                Alert.alert('Erreur réseau', 'Impossible de contacter le serveur.');
+              } finally {
+                setSubmitting(false);
+              }
+            }}
+          >
+            <Text style={styles.confirmButtonText}>{submitting ? 'Création de la course...' : 'Confirmer la commande'}</Text>
+          </TouchableOpacity>
+
+          <View style={{ height: 40 }} />
+        </BottomSheetScrollView>
+      </BottomSheet>
     </SafeAreaView>
   );
 }
@@ -266,29 +504,141 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: Colors.background },
   loadingText: { marginTop: 10, fontFamily: Fonts.titilliumWeb, color: Colors.gray },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 16, paddingBottom: 20 },
-  backButton: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center' },
-  headerTitle: { fontFamily: Fonts.titilliumWebBold, fontSize: 20, color: Colors.black },
-  scrollContent: { padding: 20, paddingBottom: 140 },
-  card: { backgroundColor: 'white', borderRadius: 16, padding: 20, marginBottom: 16, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 3 },
-  locationRow: { flexDirection: 'row', alignItems: 'flex-start', minHeight: 50 },
-  locationDotContainer: { width: 28, alignItems: 'center', paddingTop: 2 },
+  mapBackground: { ...StyleSheet.absoluteFillObject, backgroundColor: '#F3F4F6' },
+  floatingBackButton: {
+    position: 'absolute',
+    top: 50,
+    left: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'white',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 4,
+    zIndex: 10,
+  },
+  sheetBackground: {
+    backgroundColor: 'white',
+    borderRadius: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 20,
+  },
+  sheetIndicator: { backgroundColor: '#e5e7eb', width: 40 },
+  sheetTitle: {
+    fontFamily: Fonts.titilliumWebBold,
+    fontSize: 18,
+    color: Colors.black,
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  scrollContent: { padding: 20, paddingBottom: 40 },
+  routeSummaryCard: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: '#f3f4f6',
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.03,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  routeSummaryRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  summaryAddress: {
+    fontFamily: Fonts.titilliumWebSemiBold,
+    fontSize: 14,
+    color: Colors.black,
+    flex: 1,
+  },
+  lineSmall: {
+    height: 12,
+    width: 2,
+    backgroundColor: '#e5e7eb',
+    marginLeft: 5,
+    marginVertical: 2
+  },
   dot: { width: 12, height: 12, borderRadius: 6 },
-  line: { height: 30, width: 2, backgroundColor: Colors.lightGray, marginLeft: 13, marginVertical: 6 },
-  locationTextContainer: { flex: 1, paddingRight: 10 },
-  locationLabel: { fontFamily: Fonts.titilliumWeb, fontSize: 13, color: Colors.gray, marginBottom: 4 },
-  locationAddress: { fontFamily: Fonts.titilliumWebSemiBold, fontSize: 16, color: Colors.black, lineHeight: 22 },
-  serviceHeader: { marginBottom: 16 },
+  originMarker: { width: 14, height: 14, borderRadius: 7, backgroundColor: 'white', justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 3.84, elevation: 5 },
+  originDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: Colors.primary },
+  destinationMarker: { width: 14, height: 14, borderRadius: 7, backgroundColor: 'white', justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 3.84, elevation: 5 },
+  destinationDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: Colors.secondary },
+
+  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  sectionTitle: { fontFamily: Fonts.titilliumWebBold, fontSize: 16, color: Colors.black },
+  distanceBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: Colors.primary + '10', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
+  distanceText: { fontFamily: Fonts.titilliumWebBold, fontSize: 12, color: Colors.primary },
+
+  vehicleSelectionContainer: { flexDirection: 'row', justifyContent: 'space-between', gap: 12, marginBottom: 20 },
+  vehicleCard: {
+    flex: 1,
+    padding: 16,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: '#f3f4f6',
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 5,
+    elevation: 2,
+  },
+  activeVehicleCard: {
+    borderColor: Colors.primary,
+    backgroundColor: Colors.white,
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    elevation: 5,
+  },
+  vehicleIconCircle: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#f3f4f6',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  activeIconCircle: {
+    backgroundColor: Colors.primary,
+  },
+  vehicleCardName: { fontFamily: Fonts.titilliumWebBold, fontSize: 16, color: Colors.black },
+  vehicleCardPrice: { fontFamily: Fonts.titilliumWebSemiBold, fontSize: 14, color: Colors.primary, marginTop: 4 },
+  activeCardText: { color: Colors.black },
+
+  optionCard: {
+    backgroundColor: 'white',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#f3f4f6',
+  },
   optionRow: { flexDirection: 'row', alignItems: 'center' },
-  optionIcon: { width: 45, height: 45, borderRadius: 22.5, backgroundColor: Colors.background, justifyContent: 'center', alignItems: 'center', marginRight: 16 },
+  optionIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#f3f4f6', justifyContent: 'center', alignItems: 'center', marginRight: 12 },
   optionTextContainer: { flex: 1 },
-  optionTitle: { fontFamily: Fonts.titilliumWebBold, fontSize: 16, color: Colors.black },
-  optionSubtitle: { fontFamily: Fonts.titilliumWeb, fontSize: 14, color: Colors.gray, marginTop: 2 },
-  priceContainer: { borderTopWidth: 1, borderTopColor: Colors.lightGray, paddingTop: 16, marginTop: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  priceLabel: { fontFamily: Fonts.titilliumWeb, fontSize: 14, color: Colors.gray },
-  priceText: { fontFamily: Fonts.titilliumWebBold, fontSize: 20, color: Colors.primary },
-  paymentRow: { flexDirection: 'row', alignItems: 'center' },
-  footer: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: 'white', paddingHorizontal: 20, paddingTop: 16, paddingBottom: 20, borderTopWidth: 1, borderTopColor: Colors.lightGray, shadowColor: "#000", shadowOffset: { width: 0, height: -2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 5 },
-  confirmButton: { backgroundColor: Colors.primary, paddingVertical: 16, borderRadius: 12, alignItems: 'center', justifyContent: 'center', minHeight: 56 },
+  optionLabel: { fontFamily: Fonts.titilliumWeb, fontSize: 12, color: Colors.gray },
+  optionValue: { fontFamily: Fonts.titilliumWebBold, fontSize: 15, color: Colors.black, marginTop: 1 },
+
+  card: { backgroundColor: 'white', borderRadius: 16, padding: 16, marginBottom: 16, borderTopWidth: 1, borderTopColor: '#f3f4f6' },
+  priceContainer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  priceLabel: { fontFamily: Fonts.titilliumWebSemiBold, fontSize: 14, color: Colors.gray },
+  priceText: { fontFamily: Fonts.titilliumWebBold, fontSize: 24, color: Colors.primary },
+  vipTag: { fontFamily: Fonts.titilliumWebSemiBold, fontSize: 11, color: Colors.primary, marginTop: 2 },
+
+  confirmButton: { backgroundColor: Colors.secondary, paddingVertical: 16, borderRadius: 12, alignItems: 'center', justifyContent: 'center', minHeight: 56, marginTop: 8 },
   confirmButtonText: { color: 'white', fontFamily: Fonts.titilliumWebBold, fontSize: 18 },
+
+  checkbox: { width: 24, height: 24, borderRadius: 12, borderWidth: 2, borderColor: Colors.lightGray, justifyContent: 'center', alignItems: 'center' },
+  checkboxChecked: { backgroundColor: Colors.primary, borderColor: Colors.primary },
 });

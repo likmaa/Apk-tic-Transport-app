@@ -14,9 +14,7 @@ export const Colors = {
 };
 
 export const Fonts = {
-  unbounded: 'Unbounded-Regular', // Assuming you have a regular weight font file
   titilliumWeb: 'Titillium-Regular', // Assuming you have a regular weight font file
-   unboundedBold: 'Unbounded-Bold',
-   titilliumWebBold: 'Titillium-Bold',
-   titilliumWebSemiBold: 'Titillium-SemiBold',
+  titilliumWebBold: 'Titillium-Bold',
+  titilliumWebSemiBold: 'Titillium-SemiBold',
 };

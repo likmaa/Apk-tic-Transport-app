@@ -48,7 +48,6 @@ export default function OngoingRide() {
   const vehicleName = route.params?.vehicleName || 'Standard';
   const rideId = route.params?.rideId;
 
-  const { origin, destination } = useLocationStore();
   const { serviceType, packageDetails } = useServiceStore();
   const { token, user } = useAuth();
 
@@ -110,6 +109,7 @@ export default function OngoingRide() {
           router.replace({
             pathname: '/screens/ride/RideReceipt',
             params: {
+              rideId: String(rideId),
               amount: payload.fare_amount || rideData?.fare_amount || 0,
               distanceKm: (payload.distance_m || rideData?.distance_m || 0) / 1000,
               vehicleName,
@@ -137,14 +137,44 @@ export default function OngoingRide() {
     };
   }, [rideId, token, rideData, vehicleName, router]);
 
+  /* Recovery logic components */
+  const { origin, destination, setOrigin: setStoreOrigin, setDestination: setStoreDestination } = useLocationStore();
+
+  // Recovery: if store is empty, but we have rideData, fill the local store
+  React.useEffect(() => {
+    if (rideData && (!origin || !destination)) {
+      if (rideData.pickup_lat && rideData.pickup_lng) {
+        setStoreOrigin({
+          address: rideData.pickup_address,
+          lat: Number(rideData.pickup_lat),
+          lon: Number(rideData.pickup_lng),
+        });
+      }
+      if (rideData.dropoff_lat && rideData.dropoff_lng) {
+        setStoreDestination({
+          address: rideData.dropoff_address || 'Destination',
+          lat: Number(rideData.dropoff_lat),
+          lon: Number(rideData.dropoff_lng),
+        });
+      }
+    }
+  }, [rideData, origin, destination]);
+
   React.useEffect(() => {
     if (!origin || !destination) return;
 
-    setCenter([(origin.lon + destination.lon) / 2, (origin.lat + destination.lat) / 2]);
+    const lat1 = Number(origin.lat);
+    const lon1 = Number(origin.lon);
+    const lat2 = Number(destination.lat);
+    const lon2 = Number(destination.lon);
+
+    if (isNaN(lat1) || isNaN(lon1) || isNaN(lat2) || isNaN(lon2)) return;
+
+    setCenter([(lon1 + lon2) / 2, (lat1 + lat2) / 2]);
 
     (async () => {
       try {
-        const url = `https://router.project-osrm.org/route/v1/driving/${origin.lon},${origin.lat};${destination.lon},${destination.lat}?overview=full&geometries=geojson`;
+        const url = `https://router.project-osrm.org/route/v1/driving/${lon1},${lat1};${lon2},${lat2}?overview=full&geometries=geojson`;
         const res = await fetch(url);
         const data = await res.json();
         const geometry = data?.routes?.[0]?.geometry?.coordinates as Array<[number, number]> | undefined;
@@ -153,17 +183,19 @@ export default function OngoingRide() {
 
           const durationS = data?.routes?.[0]?.duration ?? 0;
           setEta(Math.max(1, Math.round(durationS / 60)));
-        } else {
+        } else if (origin && destination) {
           setCoords([
             { latitude: origin.lat, longitude: origin.lon },
             { latitude: destination.lat, longitude: destination.lon },
           ]);
         }
       } catch {
-        setCoords([
-          { latitude: origin.lat, longitude: origin.lon },
-          { latitude: destination.lat, longitude: destination.lon },
-        ]);
+        if (origin && destination) {
+          setCoords([
+            { latitude: origin.lat, longitude: origin.lon },
+            { latitude: destination.lat, longitude: destination.lon },
+          ]);
+        }
       }
     })();
   }, [origin, destination]);
@@ -181,123 +213,142 @@ export default function OngoingRide() {
   }, [coords]);
 
   return (
-    <SafeAreaView style={styles.container}>
-      {/* Carte en haut */}
-      {origin && destination && center && (
-        <View style={styles.mapBox}>
-          {Mapbox ? (
-            <MapView style={{ flex: 1 }} attributionEnabled={false} logoEnabled={false}>
-              <Camera
-                defaultSettings={{
-                  centerCoordinate: center,
-                  zoomLevel: 12
-                }}
-              />
+    <View style={styles.container}>
+      {/* Carte en plein écran */}
+      <View style={StyleSheet.absoluteFill}>
+        {Mapbox ? (
+          <MapView style={StyleSheet.absoluteFill} attributionEnabled={false} logoEnabled={false}>
+            <Camera
+              centerCoordinate={center || [2.4333, 6.3667]}
+              zoomLevel={center ? 13 : 11}
+              animationDuration={1000}
+            />
 
+            {origin && (
               <PointAnnotation id="origin" coordinate={[origin.lon, origin.lat]}>
-                <View>
-                  <MaterialCommunityIcons name="crosshairs-gps" size={24} color={Colors.primary} />
+                <View style={styles.markerContainer}>
+                  <MaterialCommunityIcons name="crosshairs-gps" size={20} color={Colors.primary} />
                 </View>
               </PointAnnotation>
+            )}
 
+            {destination && (
               <PointAnnotation id="destination" coordinate={[destination.lon, destination.lat]}>
-                <View>
-                  <MaterialCommunityIcons name="map-marker" size={28} color={'#f59e0b'} />
+                <View style={styles.markerContainer}>
+                  <MaterialCommunityIcons name="map-marker" size={24} color={'#f59e0b'} />
                 </View>
               </PointAnnotation>
+            )}
 
-              {driverPos && (
-                <PointAnnotation id="driver" coordinate={[driverPos.longitude, driverPos.latitude]}>
-                  <View style={styles.markerContainer}>
-                    <MaterialCommunityIcons name="car" size={24} color={Colors.black} />
-                  </View>
-                </PointAnnotation>
-              )}
+            {driverPos && (
+              <PointAnnotation id="driver" coordinate={[driverPos.longitude, driverPos.latitude]}>
+                <View style={styles.markerContainer}>
+                  <MaterialCommunityIcons name="car" size={20} color={Colors.black} />
+                </View>
+              </PointAnnotation>
+            )}
 
-              {routeLine && (
-                <ShapeSource id="routeSource" shape={routeLine as any}>
-                  <LineLayer
-                    id="routeFill"
-                    style={{
-                      lineColor: Colors.primary,
-                      lineWidth: 4,
-                      lineCap: 'round',
-                      lineJoin: 'round',
-                    }}
-                  />
-                </ShapeSource>
-              )}
-            </MapView>
-          ) : (
-            <MapPlaceholder style={{ height: '100%' }} />
-          )}
-        </View>
-      )}
-
-      {/* Infos chauffeur */}
-      <View style={styles.card}>
-        <View style={styles.driverRow}>
-          <Image source={require('../../../assets/images/LOGO_OR.png')} style={styles.avatar} />
-          <View style={{ flex: 1 }}>
-            <Text style={styles.title}>{rideData?.driver?.name || 'Chauffeur'}</Text>
-            <Text style={styles.sub}>{vehicleName} • {rideData?.driver?.vehicle_number || 'Vehicule'}</Text>
-          </View>
-          <View style={styles.etaPill}>
-            <Text style={styles.etaPillText}>
-              {eta ? `${eta} min` : '-- min'}
-            </Text>
-          </View>
-        </View>
-        {serviceType === 'livraison' && (
-          <View style={{ marginTop: 10 }}>
-            <Text style={[styles.sub, { marginBottom: 6 }]}>Infos colis</Text>
-            <Text style={styles.sub}>Destinataire: {packageDetails?.recipientName || '-'}</Text>
-            <Text style={styles.sub}>Téléphone: {packageDetails?.recipientPhone || '-'}</Text>
-            {!!packageDetails?.weightKg && <Text style={styles.sub}>Poids: {packageDetails?.weightKg}</Text>}
-            <Text style={styles.sub}>Fragile: {packageDetails?.fragile ? 'Oui' : 'Non'}</Text>
-          </View>
+            {routeLine && (
+              <ShapeSource id="routeSource" shape={routeLine as any}>
+                <LineLayer
+                  id="routeFill"
+                  style={{
+                    lineColor: Colors.primary,
+                    lineWidth: 4,
+                    lineCap: 'round',
+                    lineJoin: 'round',
+                  }}
+                />
+              </ShapeSource>
+            )}
+          </MapView>
+        ) : (
+          <MapPlaceholder style={StyleSheet.absoluteFill} />
         )}
       </View>
 
-      <View style={styles.actions}>
-        <TouchableOpacity
-          style={styles.secondaryBtn}
-          onPress={() => Share.share({ message: `Je suis en route ! Suivez ma course TIC : ${rideId}` })}
-        >
-          <Text style={styles.secondaryText}>Partager</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.secondaryBtn}
-          onPress={() => router.push({ pathname: '/screens/ride/ContactDriver', params: { driverName: rideData?.driver?.name, vehicleName } })}
-        >
-          <Text style={styles.secondaryText}>Contacter</Text>
-        </TouchableOpacity>
+      {/* Overlay Header */}
+      <View style={styles.topHeader}>
+        <Text style={styles.headerTitle}>En route !</Text>
+        <Text style={styles.headerSub}>Pour votre destination</Text>
       </View>
 
-      {/* Le bouton "Terminer" est supprimé car c'est automatique via Pusher */}
-      <View style={{ marginTop: 20, alignItems: 'center' }}>
-        <Text style={{ fontFamily: Fonts.titilliumWeb, color: Colors.gray }}>Course en cours...</Text>
+      {/* Bottom sheet */}
+      <View style={styles.sheet}>
+        <View style={styles.sheetHandle} />
+
+        <View style={styles.etaRow}>
+          <Text style={styles.sheetTitle}>Course en cours</Text>
+          <View style={styles.etaPill}>
+            <Text style={styles.etaPillText}>
+              {eta ? `Arrivée dans ${eta} min` : 'Calcul...'}
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.driverCard}>
+          <Image source={require('../../../assets/images/LOGO_OR.png')} style={styles.avatar} />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.driverName}>{rideData?.driver?.name || 'Chauffeur'}</Text>
+            <Text style={styles.driverSub}>{vehicleName} • {rideData?.driver?.vehicle_number || 'Vehicule'}</Text>
+          </View>
+          <TouchableOpacity
+            style={styles.iconBtn}
+            onPress={() => router.push({ pathname: '/screens/ride/ContactDriver', params: { driverName: rideData?.driver?.name, vehicleName } })}
+          >
+            <MaterialCommunityIcons name="message-text" size={20} color={Colors.black} />
+          </TouchableOpacity>
+        </View>
+
+        <TouchableOpacity
+          style={styles.consumptionBtn}
+          onPress={() => router.push({ pathname: '/screens/ride/RideConsumption', params: { rideId: String(rideId) } })}
+        >
+          <MaterialCommunityIcons name="chart-line" size={20} color={Colors.white} />
+          <Text style={styles.consumptionText}>Suivre la consommation (FCFA)</Text>
+        </TouchableOpacity>
+
+        <View style={styles.actions}>
+          <TouchableOpacity
+            style={styles.secondaryBtn}
+            onPress={() => Share.share({ message: `Je suis en route ! Suivez ma course TIC : ${rideId}` })}
+          >
+            <Text style={styles.secondaryText}>Partager le trajet</Text>
+          </TouchableOpacity>
+        </View>
       </View>
-    </SafeAreaView>
+    </View>
   );
 }
 
 type LatLng = { latitude: number; longitude: number };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background, padding: 16 },
-  mapBox: { height: 220, borderRadius: 14, overflow: 'hidden', marginBottom: 12, backgroundColor: Colors.lightGray },
-  card: { backgroundColor: Colors.white, borderRadius: 14, padding: 16, shadowColor: Colors.black, shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.08, shadowRadius: 2 },
-  driverRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  avatar: { width: 56, height: 56, borderRadius: 28, backgroundColor: Colors.background },
-  title: { fontFamily: Fonts.titilliumWebBold, color: Colors.black, fontSize: 18 },
-  sub: { fontFamily: Fonts.titilliumWeb, color: Colors.gray, marginTop: 4 },
-  etaPill: { backgroundColor: Colors.background, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12 },
-  etaPillText: { fontFamily: Fonts.titilliumWebBold, color: Colors.black },
-  actions: { flexDirection: 'row', gap: 10, marginTop: 16 },
-  secondaryBtn: { flex: 1, backgroundColor: Colors.white, paddingVertical: 12, alignItems: 'center', borderRadius: 10, borderWidth: 1, borderColor: Colors.lightGray },
-  secondaryText: { fontFamily: Fonts.titilliumWebBold, color: Colors.black },
-  primaryBtn: { marginTop: 16, backgroundColor: Colors.primary, borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
-  primaryText: { color: Colors.white, fontFamily: Fonts.titilliumWebBold },
-  markerContainer: { padding: 4, backgroundColor: 'white', borderRadius: 20, elevation: 5 },
+  container: { flex: 1, backgroundColor: Colors.white },
+  topHeader: { position: 'absolute', top: 50, left: 20, right: 20, backgroundColor: 'rgba(255,255,255,0.9)', padding: 16, borderRadius: 16, borderLeftWidth: 4, borderLeftColor: Colors.primary },
+  headerTitle: { fontFamily: Fonts.titilliumWebBold, fontSize: 22, color: Colors.black },
+  headerSub: { fontFamily: Fonts.titilliumWeb, fontSize: 14, color: Colors.gray },
+
+  sheet: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: Colors.white, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20, paddingTop: 12, paddingBottom: 40, shadowColor: "#000", shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.1, shadowRadius: 8, elevation: 10 },
+  sheetHandle: { width: 40, height: 4, backgroundColor: Colors.lightGray, borderRadius: 2, alignSelf: 'center', marginBottom: 16 },
+
+  etaRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
+  sheetTitle: { fontFamily: Fonts.titilliumWebBold, fontSize: 18, color: Colors.black },
+  etaPill: { backgroundColor: 'rgba(74, 222, 128, 0.15)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8 },
+  etaPillText: { fontFamily: Fonts.titilliumWebBold, color: '#166534', fontSize: 13 },
+
+  driverCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.background, padding: 12, borderRadius: 16, gap: 12, marginBottom: 12 },
+  avatar: { width: 48, height: 48, borderRadius: 24, backgroundColor: Colors.lightGray },
+  driverName: { fontFamily: Fonts.titilliumWebBold, fontSize: 16, color: Colors.black },
+  driverSub: { fontFamily: Fonts.titilliumWeb, fontSize: 13, color: Colors.gray },
+  iconBtn: { padding: 10, backgroundColor: Colors.white, borderRadius: 12 },
+
+  consumptionBtn: { backgroundColor: Colors.primary, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, paddingVertical: 14, borderRadius: 12, marginBottom: 12 },
+  consumptionText: { fontFamily: Fonts.titilliumWebBold, color: Colors.white, fontSize: 16 },
+
+  actions: { flexDirection: 'row', gap: 10 },
+  secondaryBtn: { flex: 1, backgroundColor: Colors.white, paddingVertical: 12, alignItems: 'center', borderRadius: 12, borderWidth: 1, borderColor: Colors.lightGray },
+  secondaryText: { fontFamily: Fonts.titilliumWebBold, color: Colors.black, fontSize: 14 },
+
+  markerContainer: { padding: 4, backgroundColor: 'white', borderRadius: 20, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 3, elevation: 5 },
 });

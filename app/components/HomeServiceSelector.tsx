@@ -3,7 +3,7 @@ import { View, TouchableOpacity, Text, StyleSheet } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Colors, Fonts } from '../theme';
 
-type ServiceType = 'Déplacement' | 'Courses' | 'Livraison';
+type ServiceType = 'Course' | 'Déplacement' | 'Livraison';
 
 type Props = {
   activeService: ServiceType;
@@ -11,32 +11,84 @@ type Props = {
 };
 
 export default function HomeServiceSelector({ activeService, onChange }: Props) {
+  const services: { id: ServiceType; label: string; icon: any }[] = [
+    { id: 'Course', label: 'Course', icon: 'car-side' },
+    { id: 'Déplacement', label: 'Déplacement', icon: 'walk' },
+    { id: 'Livraison', label: 'Livraison', icon: 'package-variant-closed' },
+  ];
+
   return (
-    <View style={styles.serviceSelector}>
-      <TouchableOpacity style={[styles.serviceButton, activeService === 'Déplacement' && styles.serviceButtonActive]} onPress={() => onChange('Déplacement')}>
-        <MaterialCommunityIcons name="car" size={26} color={activeService === 'Déplacement' ? Colors.primary : Colors.gray} />
-        <Text style={[styles.serviceButtonText, activeService === 'Déplacement' && styles.serviceButtonTextActive]}>Courses</Text>
-        {activeService === 'Déplacement' && <View style={styles.activeUnderline} />}
-      </TouchableOpacity>
-      <TouchableOpacity style={[styles.serviceButton, activeService === 'Courses' && styles.serviceButtonActive]} onPress={() => onChange('Courses')}>
-        <MaterialCommunityIcons name="walk" size={26} color={activeService === 'Courses' ? Colors.primary : Colors.gray} />
-        <Text style={[styles.serviceButtonText, activeService === 'Courses' && styles.serviceButtonTextActive]}>Deplacement</Text>
-        {activeService === 'Courses' && <View style={styles.activeUnderline} />}
-      </TouchableOpacity>
-      <TouchableOpacity style={[styles.serviceButton, activeService === 'Livraison' && styles.serviceButtonActive]} onPress={() => onChange('Livraison')}>
-        <MaterialCommunityIcons name="package-variant-closed" size={26} color={activeService === 'Livraison' ? Colors.primary : Colors.gray} />
-        <Text style={[styles.serviceButtonText, activeService === 'Livraison' && styles.serviceButtonTextActive]}>Livraison</Text>
-        {activeService === 'Livraison' && <View style={styles.activeUnderline} />}
-      </TouchableOpacity>
+    <View style={styles.container}>
+      {services.map((service) => {
+        const isActive = activeService === service.id;
+        return (
+          <TouchableOpacity
+            key={service.id}
+            activeOpacity={0.8}
+            style={[styles.pill, isActive && styles.pillActive]}
+            onPress={() => onChange(service.id)}
+          >
+            <View style={[styles.iconCircle, isActive && styles.iconCircleActive]}>
+              <MaterialCommunityIcons
+                name={service.icon}
+                size={26}
+                color={isActive ? Colors.white : Colors.primary}
+              />
+            </View>
+            <Text style={[styles.label, isActive && styles.labelActive]}>
+              {service.label}
+            </Text>
+          </TouchableOpacity>
+        );
+      })}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  serviceSelector: { flexDirection: 'row', justifyContent: 'space-between', backgroundColor: 'transparent', borderRadius: 0, paddingVertical: 0, marginHorizontal: 20, marginTop: 6, marginBottom: 10 },
-  serviceButton: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 10, marginHorizontal: 4 },
-  serviceButtonActive: {},
-  serviceButtonText: { fontFamily: 'Titillium-SemiBold', fontSize: 13, color: Colors.gray, marginTop: 4 },
-  serviceButtonTextActive: { color: Colors.primary, fontFamily: 'Titillium-SemiBold' },
-  activeUnderline: { width: 28, height: 4, backgroundColor: Colors.primary, borderRadius: 2, marginTop: 6 },
+  container: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 10
+  },
+  pill: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.white,
+    borderRadius: 20,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.03,
+    shadowRadius: 8,
+    elevation: 2
+  },
+  pillActive: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  iconCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#FFF7ED',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 6
+  },
+  iconCircleActive: {
+    backgroundColor: 'rgba(255,255,255,0.2)'
+  },
+  label: {
+    fontFamily: Fonts.titilliumWebBold,
+    fontSize: 12,
+    color: '#64748B',
+    textAlign: 'center'
+  },
+  labelActive: {
+    color: Colors.white
+  },
 });
