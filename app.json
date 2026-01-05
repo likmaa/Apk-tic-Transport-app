@@ -75,7 +75,7 @@
       "mapboxToken": "${EXPO_PUBLIC_MAPBOX_TOKEN}",
       "router": {},
       "eas": {
-        "projectId": "3757d382-8a84-46f7-be59-7db8d6eb23f3"
+        "projectId": "1816c494-082a-4d56-ac58-44df74661bd1"
       }
     },
     "experiments": {

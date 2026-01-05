@@ -3,7 +3,7 @@ import { View, Text, TextInput, TouchableOpacity, ActivityIndicator, ScrollView,
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 
-const API_URL = process.env.EXPO_PUBLIC_API_URL; // ex: http://192.168.0.141:8000/api
+const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
 export default function BecomeDriverScreen() {
   const router = useRouter();
