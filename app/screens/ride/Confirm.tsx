@@ -51,7 +51,7 @@ const reverseBackend = async (lat: number, lon: number): Promise<string | null> 
 
 // Tarifs configurables
 const BASE_FARE = 500;      // Forfait de base (F CFA)
-const PER_KM = 200;         // Prix par kilomètre (F CFA)
+const PER_KM = 250;         // Prix par kilomètre (F CFA)
 // Multiplicateurs par type de service
 const SERVICE_MULTIPLIER: Record<string, number> = {
   deplacement: 1.0,

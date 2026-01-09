@@ -1,5 +1,5 @@
 import React from 'react';
-import { SafeAreaView, StyleSheet, Text, View, TouchableOpacity, Share, Image } from 'react-native';
+import { SafeAreaView, StyleSheet, Text, View, TouchableOpacity, Share, Image, Modal } from 'react-native';
 import { Colors } from '../../theme';
 import { Fonts } from '../../font';
 import { useNavigation, useRouter } from 'expo-router';
@@ -10,11 +10,11 @@ import { useLocationStore } from '../../providers/LocationProvider';
 import { useServiceStore } from '../../providers/ServiceProvider';
 import { useAuth } from '../../providers/AuthProvider';
 import { getPusherClient, unsubscribeChannel } from '../../services/pusherClient';
-import { 
-  subscribeToNetworkChanges, 
-  saveRideState, 
+import {
+  subscribeToNetworkChanges,
+  saveRideState,
   showNetworkErrorAlert,
-  checkNetworkConnection 
+  checkNetworkConnection
 } from '../../utils/networkHandler';
 
 // Tentative d'importation sécurisée de Mapbox
@@ -63,6 +63,9 @@ export default function OngoingRide() {
   const [driverPos, setDriverPos] = React.useState<LatLng | null>(null);
   const [rideData, setRideData] = React.useState<any>(null);
   const [isOnline, setIsOnline] = React.useState(true);
+  const [stopStartedAt, setStopStartedAt] = React.useState<string | null>(null);
+  const [totalStopDurationS, setTotalStopDurationS] = React.useState<number>(0);
+  const [liveStopSeconds, setLiveStopSeconds] = React.useState<number>(0);
 
   const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
@@ -81,6 +84,8 @@ export default function OngoingRide() {
         if (res.ok) {
           const json = await res.json();
           setRideData(json);
+          setStopStartedAt(json.stop_started_at);
+          setTotalStopDurationS(json.total_stop_duration_s || 0);
         }
       } catch (e) {
         console.error('Error fetching ride data:', e);
@@ -108,6 +113,12 @@ export default function OngoingRide() {
               longitude: payload.lng,
             });
           }
+        });
+
+        channel.bind('ride.stop.updated', (payload: any) => {
+          if (cancelled) return;
+          setStopStartedAt(payload.stop_started_at);
+          setTotalStopDurationS(payload.total_stop_duration_s || 0);
         });
 
         // Listen for completion
@@ -157,7 +168,7 @@ export default function OngoingRide() {
       // Si on perd la connexion pendant une course active
       if (!state.isConnected && wasOnline && rideId) {
         // Sauvegarder l'état de la course
-        saveRideState({ rideId, driverPos, rideData }).catch(() => {});
+        saveRideState({ rideId, driverPos, rideData }).catch(() => { });
         // Afficher une alerte informative (non bloquante)
         showNetworkErrorAlert(true);
       } else if (state.isConnected && !wasOnline && rideId) {
@@ -171,7 +182,7 @@ export default function OngoingRide() {
           })
             .then(res => res.ok && res.json())
             .then(json => json && setRideData(json))
-            .catch(() => {});
+            .catch(() => { });
         }
       }
     });
@@ -184,7 +195,7 @@ export default function OngoingRide() {
     if (!rideId || !rideData) return;
 
     const saveInterval = setInterval(() => {
-      saveRideState({ rideId, driverPos, rideData }).catch(() => {});
+      saveRideState({ rideId, driverPos, rideData }).catch(() => { });
     }, 30000); // Toutes les 30 secondes
 
     return () => clearInterval(saveInterval);
@@ -265,6 +276,27 @@ export default function OngoingRide() {
     };
   }, [coords]);
 
+  // Live counter effect
+  React.useEffect(() => {
+    let interval: any;
+    if (stopStartedAt) {
+      const start = new Date(stopStartedAt).getTime();
+      interval = setInterval(() => {
+        const now = new Date().getTime();
+        setLiveStopSeconds(Math.floor((now - start) / 1000));
+      }, 1000);
+    } else {
+      setLiveStopSeconds(0);
+    }
+    return () => clearInterval(interval);
+  }, [stopStartedAt]);
+
+  const formatDuration = (seconds: number) => {
+    const min = Math.floor(seconds / 60);
+    const sec = seconds % 60;
+    return `${min}:${sec < 10 ? '0' : ''}${sec}`;
+  };
+
   return (
     <View style={styles.container}>
       {/* Badge de connexion */}
@@ -274,7 +306,7 @@ export default function OngoingRide() {
           <Text style={styles.offlineText}>Hors ligne</Text>
         </View>
       )}
-      
+
       {/* Carte en plein écran */}
       <View style={StyleSheet.absoluteFill}>
         {Mapbox ? (
@@ -378,6 +410,29 @@ export default function OngoingRide() {
           </TouchableOpacity>
         </View>
       </View>
+
+      {/* MODAL ARRÊT EN COURS */}
+      <Modal visible={!!stopStartedAt} transparent animationType="fade">
+        <View style={styles.stopModalOverlay}>
+          <View style={styles.stopModalContent}>
+            <View style={styles.stopModalHeader}>
+              <View style={styles.stopIndicator} />
+              <Text style={styles.stopModalTitle}>Arrêt en cours</Text>
+            </View>
+
+            <Text style={styles.stopModalSub}>Le chauffeur a mis la course en pause.</Text>
+
+            <View style={styles.stopTimerContainer}>
+              <MaterialCommunityIcons name="timer-outline" size={32} color={Colors.secondary} />
+              <Text style={styles.stopTimerText}>{formatDuration(liveStopSeconds)}</Text>
+            </View>
+
+            <Text style={styles.stopInfo}>
+              Cet arrêt sera facturé au tarif d'attente configuré.
+            </Text>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -386,16 +441,16 @@ type LatLng = { latitude: number; longitude: number };
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.white },
-  offlineBadge: { 
-    position: 'absolute', 
-    top: 50, 
-    right: 20, 
+  offlineBadge: {
+    position: 'absolute',
+    top: 50,
+    right: 20,
     zIndex: 1000,
-    backgroundColor: '#F59E0B', 
+    backgroundColor: '#F59E0B',
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12, 
-    paddingVertical: 6, 
+    paddingHorizontal: 12,
+    paddingVertical: 6,
     borderRadius: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -403,9 +458,9 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 5,
   },
-  offlineText: { 
-    color: Colors.white, 
-    fontSize: 12, 
+  offlineText: {
+    color: Colors.white,
+    fontSize: 12,
     fontWeight: '600',
     marginLeft: 6,
     fontFamily: Fonts.titilliumWebBold,
@@ -436,4 +491,71 @@ const styles = StyleSheet.create({
   secondaryText: { fontFamily: Fonts.titilliumWebBold, color: Colors.black, fontSize: 14 },
 
   markerContainer: { padding: 4, backgroundColor: 'white', borderRadius: 20, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 3, elevation: 5 },
+
+  // Stop Modal Styles
+  stopModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  stopModalContent: {
+    backgroundColor: Colors.white,
+    borderRadius: 24,
+    padding: 24,
+    width: '100%',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  stopModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+    gap: 10,
+  },
+  stopIndicator: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: Colors.secondary,
+  },
+  stopModalTitle: {
+    fontFamily: Fonts.titilliumWebBold,
+    fontSize: 22,
+    color: Colors.black,
+  },
+  stopModalSub: {
+    fontFamily: Fonts.titilliumWeb,
+    fontSize: 16,
+    color: Colors.gray,
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  stopTimerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.background,
+    paddingHorizontal: 20,
+    paddingVertical: 15,
+    borderRadius: 20,
+    gap: 12,
+    marginBottom: 24,
+  },
+  stopTimerText: {
+    fontFamily: Fonts.titilliumWebBold,
+    fontSize: 40,
+    color: Colors.secondary,
+  },
+  stopInfo: {
+    fontFamily: Fonts.titilliumWeb,
+    fontSize: 14,
+    color: Colors.mediumGray,
+    textAlign: 'center',
+    fontStyle: 'italic',
+  },
 });
