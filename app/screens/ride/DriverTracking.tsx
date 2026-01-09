@@ -35,6 +35,12 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { usePaymentStore } from '../../providers/PaymentProvider';
 import { haversineDistanceKm } from '../../utils/distance';
 import { getPusherClient, unsubscribeChannel } from '../../services/pusherClient';
+import { 
+  subscribeToNetworkChanges, 
+  saveRideState, 
+  showNetworkErrorAlert,
+  checkNetworkConnection 
+} from '../../utils/networkHandler';
 
 if (Mapbox) {
   Mapbox.setAccessToken(process.env.EXPO_PUBLIC_MAPBOX_TOKEN || '');
@@ -87,6 +93,7 @@ export default function DriverTracking() {
   const [driverPhone, setDriverPhone] = React.useState<string | undefined>(initialDriver?.phone);
   const [rideStatus, setRideStatus] = React.useState<string | undefined>(undefined);
   const [cancelling, setCancelling] = React.useState(false);
+  const [isOnline, setIsOnline] = React.useState(true);
 
   const handleCancel = () => {
     if (!rideId) return;
@@ -197,70 +204,112 @@ export default function DriverTracking() {
     })();
   }, [rideId, API_URL, origin]);
 
+  // Poller le statut de la course (fallback seulement si WebSocket échoue)
+  // Le WebSocket devrait gérer les événements ride.started, ride.completed, ride.cancelled
   React.useEffect(() => {
-    if (!rideId || !API_URL) return;
-    let cancelled = false;
-
-    const refreshStatus = async () => {
-      try {
-        const token = await AsyncStorage.getItem('authToken');
-        const res = await fetch(`${API_URL}/passenger/rides/${rideId}`, {
-          headers: {
-            Accept: 'application/json',
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          },
-        });
-        if (!res.ok) return;
-        const json = await res.json().catch(() => null);
-        if (!json || cancelled) return;
-        if (json.status) setRideStatus(json.status);
-      } catch {
-        // ignore
-      }
-    };
-
-    const interval = setInterval(refreshStatus, 10000);
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-    };
-  }, [rideId, API_URL]);
-
-  // Poller la position du chauffeur
-  React.useEffect(() => {
-    if (!rideId || !API_URL) return;
+    if (!rideId || !API_URL || !isOnline) return;
 
     let cancelled = false;
+    let lastWebSocketEvent = Date.now();
 
-    const fetchDriverLocation = async () => {
-      try {
-        const token = await AsyncStorage.getItem('authToken');
-        const res = await fetch(`${API_URL}/passenger/rides/${rideId}/driver-location`, {
-          headers: {
-            Accept: 'application/json',
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          },
-        });
-        if (!res.ok) return;
-        const json = await res.json();
-        if (typeof json?.lat === 'number' && typeof json?.lng === 'number') {
-          if (!cancelled) {
-            setDriverPos({ latitude: json.lat, longitude: json.lng });
+    // Vérifier périodiquement si le WebSocket fonctionne
+    // Si pas d'événement depuis 60s, faire un polling de fallback
+    const fallbackStatusInterval = setInterval(async () => {
+      const timeSinceLastEvent = Date.now() - lastWebSocketEvent;
+      
+      // Si pas d'événement depuis 60s, faire un appel API de fallback
+      if (timeSinceLastEvent > 60000) {
+        try {
+          const token = await AsyncStorage.getItem('authToken');
+          const res = await fetch(`${API_URL}/passenger/rides/${rideId}`, {
+            headers: {
+              Accept: 'application/json',
+              ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            },
+          });
+          if (res.ok) {
+            const json = await res.json().catch(() => null);
+            if (json?.status && !cancelled) {
+              setRideStatus(json.status);
+              lastWebSocketEvent = Date.now();
+            }
           }
+        } catch {
+          // ignore
         }
-      } catch {
-        // ignore
       }
-    };
-
-    fetchDriverLocation();
-    const interval = setInterval(fetchDriverLocation, 5000);
+    }, 30000); // Vérifier toutes les 30 secondes
 
     return () => {
       cancelled = true;
-      clearInterval(interval);
+      clearInterval(fallbackStatusInterval);
     };
-  }, [rideId, API_URL]);
+  }, [rideId, API_URL, isOnline]);
+
+  // Surveiller la connexion réseau
+  React.useEffect(() => {
+    // Vérifier l'état initial
+    checkNetworkConnection().then(state => setIsOnline(state.isConnected));
+
+    // S'abonner aux changements de connexion
+    const unsubscribe = subscribeToNetworkChanges((state) => {
+      const wasOnline = isOnline;
+      setIsOnline(state.isConnected);
+
+      // Si on perd la connexion pendant une course active
+      if (!state.isConnected && wasOnline && rideId) {
+        // Sauvegarder l'état de la course
+        saveRideState({ rideId, driverPos, rideStatus }).catch(() => {});
+        // Afficher une alerte informative (non bloquante)
+        showNetworkErrorAlert(true);
+      }
+    });
+
+    return unsubscribe;
+  }, [isOnline, rideId, driverPos, rideStatus]);
+
+  // Fallback polling pour la position du chauffeur (seulement si WebSocket échoue)
+  // NOTE: Le WebSocket via Pusher devrait gérer la position en temps réel
+  // Ce polling n'est qu'un fallback de sécurité toutes les 30 secondes
+  React.useEffect(() => {
+    if (!rideId || !API_URL || !isOnline) return;
+
+    let cancelled = false;
+    let lastWebSocketUpdate = Date.now();
+
+    // Vérifier périodiquement si le WebSocket fonctionne
+    // Si pas de mise à jour depuis 30s, faire un polling de fallback
+    const fallbackInterval = setInterval(async () => {
+      const timeSinceLastUpdate = Date.now() - lastWebSocketUpdate;
+      
+      // Si pas de mise à jour depuis 30s, faire un appel API de fallback
+      if (timeSinceLastUpdate > 30000) {
+        try {
+          const token = await AsyncStorage.getItem('authToken');
+          const res = await fetch(`${API_URL}/passenger/rides/${rideId}/driver-location`, {
+            headers: {
+              Accept: 'application/json',
+              ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            },
+          });
+          if (res.ok) {
+            const json = await res.json();
+            if (typeof json?.lat === 'number' && typeof json?.lng === 'number' && !cancelled) {
+              setDriverPos({ latitude: json.lat, longitude: json.lng });
+              lastWebSocketUpdate = Date.now();
+            }
+          }
+        } catch {
+          // ignore
+        }
+      }
+    }, 30000); // Vérifier toutes les 30 secondes
+
+    return () => {
+      cancelled = true;
+      clearInterval(fallbackInterval);
+    };
+  }, [rideId, API_URL, isOnline]);
 
   // Recenter map logic
   React.useEffect(() => {
@@ -294,6 +343,8 @@ export default function DriverTracking() {
               latitude: payload.lat,
               longitude: payload.lng,
             });
+            // Mettre à jour le timestamp pour le fallback polling
+            (window as any)._lastDriverLocationUpdate = Date.now();
           }
           if (typeof payload?.eta_minutes === 'number') {
             setEtaMin(payload.eta_minutes);
@@ -304,6 +355,7 @@ export default function DriverTracking() {
           if (cancelled) return;
           console.log('Ride started event received', payload);
           setRideStatus('ongoing');
+          (window as any)._lastDriverLocationUpdate = Date.now();
           // Navigate to OngoingRide screen
           navigation.navigate({
             name: 'screens/ride/OngoingRide',
@@ -429,6 +481,14 @@ export default function DriverTracking() {
         <Ionicons name="chevron-back" size={22} color={Colors.black} />
       </TouchableOpacity>
 
+      {/* Badge de connexion */}
+      {!isOnline && (
+        <View style={styles.offlineBadge}>
+          <Ionicons name="cloud-offline" size={14} color={Colors.white} />
+          <Text style={styles.offlineText}>Hors ligne</Text>
+        </View>
+      )}
+
       {/* Bottom sheet */}
       <View style={styles.sheet}>
         <Text style={styles.sheetTitle}>Chauffeur en approche</Text>
@@ -504,6 +564,30 @@ export default function DriverTracking() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
+  offlineBadge: { 
+    position: 'absolute', 
+    top: 50, 
+    right: 20, 
+    zIndex: 1000,
+    backgroundColor: '#F59E0B', 
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12, 
+    paddingVertical: 6, 
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  offlineText: { 
+    color: Colors.white, 
+    fontSize: 12, 
+    fontWeight: '600',
+    marginLeft: 6,
+    fontFamily: Fonts.titilliumWebBold,
+  },
   sheet: { position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: Colors.white, borderTopLeftRadius: 16, borderTopRightRadius: 16, paddingHorizontal: 16, paddingTop: 20, paddingBottom: 40 },
   sheetTitle: { fontFamily: Fonts.titilliumWebBold, fontSize: 18, color: Colors.black },
   sheetSub: { fontFamily: Fonts.titilliumWeb, color: Colors.gray, marginBottom: 12 },

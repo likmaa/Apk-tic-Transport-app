@@ -39,6 +39,11 @@ import { useLocationStore } from '../../providers/LocationProvider';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getPusherClient, unsubscribeChannel } from '../../services/pusherClient';
+import { 
+  subscribeToNetworkChanges, 
+  showNetworkErrorAlert,
+  checkNetworkConnection 
+} from '../../utils/networkHandler';
 
 if (Mapbox) {
   Mapbox.setAccessToken(process.env.EXPO_PUBLIC_MAPBOX_TOKEN || '');
@@ -144,6 +149,7 @@ export default function SearchingDriver() {
   const [assignmentReceived, setAssignmentReceived] = useState(false);
   const [loadingDetails, setLoadingDetails] = useState(false);
   const [cancelling, setCancelling] = useState(false);
+  const [isOnline, setIsOnline] = useState(true);
 
   // Recovery logic: if we don't have origin/destination, fetch them from the ride
   useEffect(() => {
@@ -252,6 +258,25 @@ export default function SearchingDriver() {
     };
   }, [rideId, router, vehicleName]);
 
+  // Surveiller la connexion réseau
+  useEffect(() => {
+    // Vérifier l'état initial
+    checkNetworkConnection().then(state => setIsOnline(state.isConnected));
+
+    // S'abonner aux changements de connexion
+    const unsubscribe = subscribeToNetworkChanges((state) => {
+      const wasOnline = isOnline;
+      setIsOnline(state.isConnected);
+
+      // Si on perd la connexion pendant la recherche
+      if (!state.isConnected && wasOnline && rideId) {
+        showNetworkErrorAlert(false);
+      }
+    });
+
+    return unsubscribe;
+  }, [isOnline, rideId]);
+
   useEffect(() => {
     if (!rideId || !API_URL || assignmentReceived) return;
 
@@ -348,6 +373,12 @@ export default function SearchingDriver() {
       {/* Timer en haut */}
       <SafeAreaView style={styles.topBar}>
         <SearchTimer />
+        {!isOnline && (
+          <View style={styles.offlineBadge}>
+            <Ionicons name="cloud-offline" size={14} color={Colors.white} />
+            <Text style={styles.offlineText}>Hors ligne</Text>
+          </View>
+        )}
       </SafeAreaView>
 
       {/* Carte glassmorphic avec infos */}
@@ -429,6 +460,30 @@ const styles = StyleSheet.create({
     right: 0,
     paddingTop: 60,
     alignItems: 'center',
+  },
+  offlineBadge: { 
+    position: 'absolute',
+    top: 60,
+    right: 20,
+    backgroundColor: '#F59E0B', 
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12, 
+    paddingVertical: 6, 
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+    zIndex: 1000,
+  },
+  offlineText: { 
+    color: Colors.white, 
+    fontSize: 12, 
+    fontWeight: '600',
+    marginLeft: 6,
+    fontFamily: Fonts.titilliumWebBold,
   },
 
   timerContainer: {

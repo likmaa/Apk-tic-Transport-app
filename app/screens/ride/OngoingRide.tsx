@@ -10,6 +10,12 @@ import { useLocationStore } from '../../providers/LocationProvider';
 import { useServiceStore } from '../../providers/ServiceProvider';
 import { useAuth } from '../../providers/AuthProvider';
 import { getPusherClient, unsubscribeChannel } from '../../services/pusherClient';
+import { 
+  subscribeToNetworkChanges, 
+  saveRideState, 
+  showNetworkErrorAlert,
+  checkNetworkConnection 
+} from '../../utils/networkHandler';
 
 // Tentative d'importation sécurisée de Mapbox
 let Mapbox: any = null;
@@ -56,6 +62,7 @@ export default function OngoingRide() {
   const [coords, setCoords] = React.useState<Array<{ latitude: number; longitude: number }>>([]);
   const [driverPos, setDriverPos] = React.useState<LatLng | null>(null);
   const [rideData, setRideData] = React.useState<any>(null);
+  const [isOnline, setIsOnline] = React.useState(true);
 
   const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
@@ -137,6 +144,52 @@ export default function OngoingRide() {
     };
   }, [rideId, token, rideData, vehicleName, router]);
 
+  // Surveiller la connexion réseau
+  React.useEffect(() => {
+    // Vérifier l'état initial
+    checkNetworkConnection().then(state => setIsOnline(state.isConnected));
+
+    // S'abonner aux changements de connexion
+    const unsubscribe = subscribeToNetworkChanges((state) => {
+      const wasOnline = isOnline;
+      setIsOnline(state.isConnected);
+
+      // Si on perd la connexion pendant une course active
+      if (!state.isConnected && wasOnline && rideId) {
+        // Sauvegarder l'état de la course
+        saveRideState({ rideId, driverPos, rideData }).catch(() => {});
+        // Afficher une alerte informative (non bloquante)
+        showNetworkErrorAlert(true);
+      } else if (state.isConnected && !wasOnline && rideId) {
+        // Reconnexion : recharger les données
+        if (API_URL && token) {
+          fetch(`${API_URL}/passenger/rides/${rideId}`, {
+            headers: {
+              Accept: 'application/json',
+              Authorization: `Bearer ${token}`,
+            },
+          })
+            .then(res => res.ok && res.json())
+            .then(json => json && setRideData(json))
+            .catch(() => {});
+        }
+      }
+    });
+
+    return unsubscribe;
+  }, [isOnline, rideId, driverPos, rideData, API_URL, token]);
+
+  // Sauvegarder l'état périodiquement
+  React.useEffect(() => {
+    if (!rideId || !rideData) return;
+
+    const saveInterval = setInterval(() => {
+      saveRideState({ rideId, driverPos, rideData }).catch(() => {});
+    }, 30000); // Toutes les 30 secondes
+
+    return () => clearInterval(saveInterval);
+  }, [rideId, driverPos, rideData]);
+
   /* Recovery logic components */
   const { origin, destination, setOrigin: setStoreOrigin, setDestination: setStoreDestination } = useLocationStore();
 
@@ -214,6 +267,14 @@ export default function OngoingRide() {
 
   return (
     <View style={styles.container}>
+      {/* Badge de connexion */}
+      {!isOnline && (
+        <View style={styles.offlineBadge}>
+          <MaterialCommunityIcons name="cloud-off-outline" size={14} color={Colors.white} />
+          <Text style={styles.offlineText}>Hors ligne</Text>
+        </View>
+      )}
+      
       {/* Carte en plein écran */}
       <View style={StyleSheet.absoluteFill}>
         {Mapbox ? (
@@ -325,6 +386,30 @@ type LatLng = { latitude: number; longitude: number };
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.white },
+  offlineBadge: { 
+    position: 'absolute', 
+    top: 50, 
+    right: 20, 
+    zIndex: 1000,
+    backgroundColor: '#F59E0B', 
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12, 
+    paddingVertical: 6, 
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  offlineText: { 
+    color: Colors.white, 
+    fontSize: 12, 
+    fontWeight: '600',
+    marginLeft: 6,
+    fontFamily: Fonts.titilliumWebBold,
+  },
   topHeader: { position: 'absolute', top: 50, left: 20, right: 20, backgroundColor: 'rgba(255,255,255,0.9)', padding: 16, borderRadius: 16, borderLeftWidth: 4, borderLeftColor: Colors.primary },
   headerTitle: { fontFamily: Fonts.titilliumWebBold, fontSize: 22, color: Colors.black },
   headerSub: { fontFamily: Fonts.titilliumWeb, fontSize: 14, color: Colors.gray },
