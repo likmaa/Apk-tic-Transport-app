@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { SafeAreaView, StyleSheet, Text, View, TouchableOpacity, Alert, TextInput, ScrollView } from 'react-native';
+import { getPusherClient, unsubscribeChannel } from '../../services/pusherClient';
 import { Colors } from '../../theme';
 import { Fonts } from '../../font';
 import { useRouter } from 'expo-router';
@@ -22,6 +23,7 @@ type RootParams = {
     pickupLng?: number;
     dropoffLat?: number;
     dropoffLng?: number;
+    paymentMethod?: string;
   } | undefined;
 };
 
@@ -33,10 +35,51 @@ export default function RideReceipt() {
   const distanceKm = Number(route.params?.distanceKm ?? 0);
   const vehicleName = route.params?.vehicleName ?? 'Standard';
   const durationMin = route.params?.durationMin ?? '--';
+  const paymentMethod = route.params?.paymentMethod ?? 'cash';
 
   const [stars, setStars] = useState(5);
   const [tip, setTip] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
+  const [paymentVerified, setPaymentVerified] = useState(false);
+
+  const isMounted = useRef(true);
+
+  useEffect(() => {
+    isMounted.current = true;
+    let channel: any = null;
+
+    if (rideId && (paymentMethod === 'qr' || paymentMethod === 'card')) {
+      (async () => {
+        try {
+          const token = await AsyncStorage.getItem('authToken');
+          if (!token) return;
+
+          const client = await getPusherClient(token);
+          channel = client.subscribe(`private-ride.${rideId}`);
+
+          channel.bind('payment.confirmed', (data: any) => {
+            if (!isMounted.current) return;
+            console.log('[RideReceipt] Payment confirmed globally:', data);
+            setPaymentVerified(true);
+            Alert.alert(
+              "Paiement Confirmé !",
+              "Votre paiement a été reçu avec succès. Merci d'avoir utilisé TIC !",
+              [{ text: "Super !" }]
+            );
+          });
+        } catch (e) {
+          console.warn('[RideReceipt] Pusher error:', e);
+        }
+      })();
+    }
+
+    return () => {
+      isMounted.current = false;
+      if (channel) {
+        unsubscribeChannel(channel);
+      }
+    };
+  }, [rideId, paymentMethod]);
 
   // Coordinates for Map
   const pickupLat = Number(route.params?.pickupLat ?? 0);
@@ -141,6 +184,25 @@ export default function RideReceipt() {
                 <Text style={styles.statValue}>{(amount).toLocaleString('fr-FR')}</Text>
               </View>
             </View>
+
+            <View style={styles.divider} />
+
+            {/* QR SCAN BUTTON */}
+            {paymentMethod === 'qr' && !paymentVerified && (
+              <View style={styles.qrSection}>
+                <TouchableOpacity style={styles.qrButton} onPress={() => router.push('/screens/payment/ScanQR')}>
+                  <Ionicons name="qr-code-outline" size={24} color="white" />
+                  <Text style={styles.qrButtonText}>Scanner le QR Code</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {paymentMethod === 'qr' && paymentVerified && (
+              <View style={[styles.qrSection, { backgroundColor: '#ECFDF5', padding: 16, borderRadius: 16, flexDirection: 'row', alignItems: 'center', gap: 10 }]}>
+                <Ionicons name="checkmark-circle" size={24} color="#10B981" />
+                <Text style={{ color: '#065F46', fontFamily: Fonts.titilliumWebBold }}>Paiement Terminé</Text>
+              </View>
+            )}
 
             <View style={styles.divider} />
 
@@ -251,6 +313,10 @@ const styles = StyleSheet.create({
   verticalLine: { width: 1, height: 24, backgroundColor: Colors.lightGray },
 
   divider: { height: 1, backgroundColor: Colors.lightGray, marginVertical: 20 },
+
+  qrSection: { marginBottom: 20 },
+  qrButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: Colors.black, borderRadius: 16, paddingVertical: 16, gap: 10, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 5, elevation: 4 },
+  qrButtonText: { fontFamily: Fonts.titilliumWebBold, color: '#fff', fontSize: 16 },
 
   ratingSection: { alignItems: 'center' },
   ratingTitle: { fontFamily: Fonts.titilliumWebBold, fontSize: 16, color: Colors.black, marginBottom: 16 },

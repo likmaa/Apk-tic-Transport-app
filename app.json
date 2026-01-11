@@ -4,7 +4,7 @@
     "slug": "transport",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/LOGO_OR.png",
+    "icon": "./assets/images/app-icon.png",
     "scheme": "transport",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
@@ -26,9 +26,7 @@
       "usesCleartextTraffic": true,
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundImage": "./assets/images/android-icon-background.png",
-        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+        "foregroundImage": "./assets/images/app-icon.png"
       },
       "permissions": [
         "android.permission.ACCESS_FINE_LOCATION",

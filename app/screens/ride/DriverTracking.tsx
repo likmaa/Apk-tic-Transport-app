@@ -35,11 +35,11 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { usePaymentStore } from '../../providers/PaymentProvider';
 import { haversineDistanceKm } from '../../utils/distance';
 import { getPusherClient, unsubscribeChannel } from '../../services/pusherClient';
-import { 
-  subscribeToNetworkChanges, 
-  saveRideState, 
+import {
+  subscribeToNetworkChanges,
+  saveRideState,
   showNetworkErrorAlert,
-  checkNetworkConnection 
+  checkNetworkConnection
 } from '../../utils/networkHandler';
 
 if (Mapbox) {
@@ -58,6 +58,93 @@ type RouteParams = {
 };
 
 type LatLng = { latitude: number; longitude: number };
+
+function WaitTimer({ arrivedAt }: { arrivedAt: string }) {
+  const [seconds, setSeconds] = React.useState(0);
+
+  React.useEffect(() => {
+    const start = new Date(arrivedAt).getTime();
+    const interval = setInterval(() => {
+      setSeconds(Math.floor((Date.now() - start) / 1000));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [arrivedAt]);
+
+  const grace = 5 * 60; // 5 min
+  const isOverGrace = seconds > grace;
+  const displaySeconds = isOverGrace ? seconds - grace : grace - seconds;
+
+  const formatTime = (s: number) => {
+    const m = Math.floor(s / 60);
+    const rs = s % 60;
+    return `${m}:${rs.toString().padStart(2, '0')}`;
+  };
+
+  return (
+    <View style={[timerStyles.timerCard, isOverGrace && timerStyles.timerCardAlert]}>
+      <Ionicons
+        name={isOverGrace ? "warning" : "hourglass-outline"}
+        size={24}
+        color={isOverGrace ? "#ef4444" : Colors.primary}
+      />
+      <View style={{ flex: 1 }}>
+        <Text style={timerStyles.timerLabel}>
+          {isOverGrace ? "Attente facturée" : "Délai de grâce"}
+        </Text>
+        <Text style={[timerStyles.timerValue, isOverGrace && timerStyles.timerValueAlert]}>
+          {formatTime(displaySeconds)}
+        </Text>
+      </View>
+      {isOverGrace && (
+        <View style={timerStyles.feeBadge}>
+          <Text style={timerStyles.feeText}>+{Math.floor(displaySeconds / 60) * 10} F</Text>
+        </View>
+      )}
+    </View>
+  );
+}
+
+const timerStyles = StyleSheet.create({
+  timerCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 16,
+    gap: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  timerCardAlert: {
+    borderColor: '#fecaca',
+    backgroundColor: '#fff1f2',
+  },
+  timerLabel: {
+    color: Colors.gray,
+    fontSize: 12,
+    fontFamily: Fonts.titilliumWeb,
+  },
+  timerValue: {
+    color: Colors.black,
+    fontSize: 18,
+    fontFamily: Fonts.titilliumWebBold,
+  },
+  timerValueAlert: {
+    color: '#ef4444',
+  },
+  feeBadge: {
+    backgroundColor: '#fee2e2',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  feeText: {
+    color: '#ef4444',
+    fontFamily: Fonts.titilliumWebBold,
+    fontSize: 12,
+  },
+});
 
 export default function DriverTracking() {
   const router = useRouter();
@@ -94,6 +181,7 @@ export default function DriverTracking() {
   const [rideStatus, setRideStatus] = React.useState<string | undefined>(undefined);
   const [cancelling, setCancelling] = React.useState(false);
   const [isOnline, setIsOnline] = React.useState(true);
+  const [arrivedAt, setArrivedAt] = React.useState<string | null>(null);
 
   const handleCancel = () => {
     if (!rideId) return;
@@ -191,6 +279,9 @@ export default function DriverTracking() {
         }
         if (json?.status) {
           setRideStatus(json.status);
+          if (json.arrived_at) {
+            setArrivedAt(json.arrived_at);
+          }
           if (['ongoing', 'started'].includes(json.status)) {
             navigation.navigate({
               name: 'screens/ride/OngoingRide',
@@ -216,7 +307,7 @@ export default function DriverTracking() {
     // Si pas d'événement depuis 60s, faire un polling de fallback
     const fallbackStatusInterval = setInterval(async () => {
       const timeSinceLastEvent = Date.now() - lastWebSocketEvent;
-      
+
       // Si pas d'événement depuis 60s, faire un appel API de fallback
       if (timeSinceLastEvent > 60000) {
         try {
@@ -259,7 +350,7 @@ export default function DriverTracking() {
       // Si on perd la connexion pendant une course active
       if (!state.isConnected && wasOnline && rideId) {
         // Sauvegarder l'état de la course
-        saveRideState({ rideId, driverPos, rideStatus }).catch(() => {});
+        saveRideState({ rideId, driverPos, rideStatus }).catch(() => { });
         // Afficher une alerte informative (non bloquante)
         showNetworkErrorAlert(true);
       }
@@ -281,7 +372,7 @@ export default function DriverTracking() {
     // Si pas de mise à jour depuis 30s, faire un polling de fallback
     const fallbackInterval = setInterval(async () => {
       const timeSinceLastUpdate = Date.now() - lastWebSocketUpdate;
-      
+
       // Si pas de mise à jour depuis 30s, faire un appel API de fallback
       if (timeSinceLastUpdate > 30000) {
         try {
@@ -372,7 +463,8 @@ export default function DriverTracking() {
             params: {
               amount: payload.fare_amount || 0,
               distanceKm: (payload.distance_m || 0) / 1000,
-              vehicleName: vehicleNameParam || 'Véhicule'
+              vehicleName: vehicleNameParam || 'Véhicule',
+              paymentMethod: method,
             }
           } as never);
         });
@@ -382,6 +474,15 @@ export default function DriverTracking() {
           setRideStatus('cancelled');
           Alert.alert('Course annulée', 'La course a été annulée.');
           navigation.navigate('index' as never);
+        });
+
+        channel.bind('ride.arrived', (payload: any) => {
+          if (cancelled) return;
+          setRideStatus('arrived');
+          if (payload.arrived_at) {
+            setArrivedAt(payload.arrived_at);
+          }
+          Alert.alert('Chauffeur arrivé', 'Votre chauffeur est arrivé au point de prise en charge.');
         });
       } catch (error) {
         console.warn('Realtime ride subscription failed', error);
@@ -503,6 +604,10 @@ export default function DriverTracking() {
           )}
         </Text>
 
+        {rideStatus === 'arrived' && arrivedAt && (
+          <WaitTimer arrivedAt={arrivedAt} />
+        )}
+
         <TouchableOpacity style={styles.driverCard} activeOpacity={0.8} onPress={() => navigation.navigate('screens/ride/ContactDriver' as never)}>
           <View style={styles.avatar}>
             <Ionicons name="person" size={20} color={Colors.white} />
@@ -564,16 +669,16 @@ export default function DriverTracking() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
-  offlineBadge: { 
-    position: 'absolute', 
-    top: 50, 
-    right: 20, 
+  offlineBadge: {
+    position: 'absolute',
+    top: 50,
+    right: 20,
     zIndex: 1000,
-    backgroundColor: '#F59E0B', 
+    backgroundColor: '#F59E0B',
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12, 
-    paddingVertical: 6, 
+    paddingHorizontal: 12,
+    paddingVertical: 6,
     borderRadius: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -581,9 +686,9 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 5,
   },
-  offlineText: { 
-    color: Colors.white, 
-    fontSize: 12, 
+  offlineText: {
+    color: Colors.white,
+    fontSize: 12,
     fontWeight: '600',
     marginLeft: 6,
     fontFamily: Fonts.titilliumWebBold,

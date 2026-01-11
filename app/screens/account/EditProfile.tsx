@@ -78,19 +78,33 @@ export default function EditProfile() {
         return;
       }
 
+      const formData = new FormData();
+      formData.append('name', name);
+      formData.append('email', email);
+      formData.append('phone', phone);
+      formData.append('_method', 'PUT'); // Spoofing PUT because multipart/form-data works best with POST
+
+      if (avatarUri && !avatarUri.startsWith('http')) {
+        // C'est un fichier local à envoyer
+        const filename = avatarUri.split('/').pop();
+        const match = /\.(\w+)$/.exec(filename || '');
+        const type = match ? `image/${match[1]}` : `image`;
+
+        formData.append('photo', {
+          uri: avatarUri,
+          name: filename,
+          type,
+        } as any);
+      }
+
       const res = await fetch(`${API_URL}/auth/profile`, {
-        method: 'PUT',
+        method: 'POST', // On utilise POST avec _method: PUT
         headers: {
-          'Content-Type': 'application/json',
           Accept: 'application/json',
           Authorization: `Bearer ${token}`,
+          // Note: Ne pas mettre Content-Type, fetch le fera avec le boundary
         },
-        body: JSON.stringify({
-          name,
-          email,
-          phone,
-          photo: avatarUri,
-        }),
+        body: formData,
       });
 
       const json = await res.json().catch(() => null);
@@ -100,8 +114,13 @@ export default function EditProfile() {
         return;
       }
 
-      // Mettre à jour le user local
-      await AsyncStorage.setItem('authUser', JSON.stringify({ ...json, avatar: avatarUri, photo: avatarUri }));
+      // Mettre à jour le user local avec les données serveur (qui incluent le nouvel URL de la photo)
+      const updatedPhoto = json.photo;
+      if (updatedPhoto) {
+        setAvatarUri(updatedPhoto);
+      }
+
+      await AsyncStorage.setItem('authUser', JSON.stringify({ ...json }));
       Alert.alert('Succès', 'Profil mis à jour.');
     } catch (e: any) {
       Alert.alert('Erreur', e?.message || "Erreur réseau lors de la mise à jour du profil");

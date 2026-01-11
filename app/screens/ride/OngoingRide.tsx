@@ -423,13 +423,14 @@ export default function OngoingRide() {
             <Text style={styles.stopModalSub}>Le chauffeur a mis la course en pause.</Text>
 
             <View style={styles.stopTimerContainer}>
-              <MaterialCommunityIcons name="timer-outline" size={32} color={Colors.secondary} />
-              <Text style={styles.stopTimerText}>{formatDuration(liveStopSeconds)}</Text>
+              <MaterialCommunityIcons name="timer-outline" size={32} color={'#f59e0b'} />
+              <Text style={styles.stopTimerText}>{formatDuration((totalStopDurationS || 0) + liveStopSeconds)}</Text>
             </View>
-
-            <Text style={styles.stopInfo}>
-              Cet arrêt sera facturé au tarif d'attente configuré.
-            </Text>
+            {totalStopDurationS > 0 && liveStopSeconds > 0 && (
+              <Text style={styles.stopInfo}>
+                Total déjà cumulé: {Math.floor(totalStopDurationS / 60)} min
+              </Text>
+            )}
           </View>
         </View>
       </Modal>

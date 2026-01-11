@@ -71,7 +71,7 @@ export default function ConfirmRide() {
   const { passengerName, passengerPhone } = useLocalSearchParams();
   const { origin, destination, setOrigin, requestUserLocation } = useLocationStore();
   const { method } = usePaymentStore();
-  const { serviceType } = useServiceStore();
+  const { serviceType, packageDetails } = useServiceStore();
 
   const [isLoading, setIsLoading] = useState(true);
   const [priceEstimate, setPriceEstimate] = useState<number | null>(null);
@@ -467,6 +467,15 @@ export default function ConfirmRide() {
                     passenger_phone: passengerPhone,
                     vehicle_type: vehicleType,
                     has_baggage: hasBaggage,
+                    payment_method: method,
+                    service_type: serviceType, // course, livraison, deplacement
+                    ...(serviceType === 'livraison' && packageDetails ? {
+                      recipient_name: packageDetails.recipientName,
+                      recipient_phone: packageDetails.recipientPhone,
+                      package_description: packageDetails.description,
+                      package_weight: packageDetails.weightKg,
+                      is_fragile: packageDetails.fragile,
+                    } : {}),
                   }),
                 });
 
