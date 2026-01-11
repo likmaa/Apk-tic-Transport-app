@@ -20,7 +20,7 @@
         "EXPO_PUBLIC_MAPBOX_TOKEN": "pk.eyJ1Ijoibm91dmVhdTU4IiwiYSI6ImNtaHpkMHp3NzBmNDEyanNmc2RyMmduNG8ifQ.cpF-VCHXqMq9wX8l8HIpbw",
         "EXPO_PUBLIC_PUSHER_HOST": "ws.ticmiton.com",
         "EXPO_PUBLIC_PUSHER_PORT": "6001",
-        "EXPO_PUBLIC_PUSHER_KEY": "apk-tic-key"
+        "EXPO_PUBLIC_PUSHER_KEY": "079f17cc246e8801f83f1e7efc931cf6"
       },
       "android": {
         "buildType": "apk"
@@ -30,7 +30,7 @@
       "env": {
         "EXPO_PUBLIC_API_URL": "https://api.ticmiton.com/api",
         "EXPO_PUBLIC_MAPBOX_TOKEN": "pk.eyJ1Ijoibm91dmVhdTU4IiwiYSI6ImNtaHpkMHp3NzBmNDEyanNmc2RyMmduNG8ifQ.cpF-VCHXqMq9wX8l8HIpbw",
-        "EXPO_PUBLIC_PUSHER_KEY": "apk-tic-key",
+        "EXPO_PUBLIC_PUSHER_KEY": "079f17cc246e8801f83f1e7efc931cf6",
         "EXPO_PUBLIC_PUSHER_HOST": "ws.ticmiton.com",
         "EXPO_PUBLIC_PUSHER_PORT": "443",
         "EXPO_PUBLIC_PUSHER_TLS": "true"
