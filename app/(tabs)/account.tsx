@@ -91,11 +91,16 @@ export default function AccountTab() {
             <View style={styles.avatarPlaceholder}>
               <Text style={styles.avatarInitial}>{user?.name?.charAt(0) || 'U'}</Text>
             </View>
-            <TouchableOpacity style={styles.editAvatarBtn}>
+            <TouchableOpacity
+              style={styles.editAvatarBtn}
+              onPress={() => router.push('/screens/account/EditProfile' as any)}
+            >
               <Ionicons name="camera" size={16} color={Colors.white} />
             </TouchableOpacity>
           </View>
-          <Text style={styles.userName}>{user?.name || 'Utilisateur'}</Text>
+          <TouchableOpacity onPress={() => router.push('/screens/account/EditProfile' as any)}>
+            <Text style={styles.userName}>{user?.name || 'Utilisateur'}</Text>
+          </TouchableOpacity>
           <Text style={styles.userPhone}>{user?.phone || 'Chargement...'}</Text>
         </View>
 
@@ -104,9 +109,15 @@ export default function AccountTab() {
           <Text style={styles.sectionTitle}>Général</Text>
           <View style={styles.menuCard}>
             <MenuItem
+              icon="person-outline"
+              label="Modifier mon profil"
+              onPress={() => router.push('/screens/account/EditProfile' as any)}
+            />
+            <View style={styles.separator} />
+            <MenuItem
               icon="location-outline"
               label="Mes Adresses"
-              onPress={() => { }}
+              onPress={() => router.push('/screens/account/Addresses' as any)}
             />
             <View style={styles.separator} />
             <MenuItem
@@ -129,22 +140,23 @@ export default function AccountTab() {
             <MenuItem
               icon="help-circle-outline"
               label="Centre d'aide"
-              onPress={() => { }}
+              onPress={() => router.push('/screens/settings/HelpCenter' as any)}
             />
             <View style={styles.separator} />
             <MenuItem
               icon="shield-outline"
               label="Confidentialité"
-              onPress={() => { }}
+              onPress={() => router.push('/screens/settings/HelpCenter' as any)}
             />
             <View style={styles.separator} />
             <MenuItem
               icon="settings-outline"
               label="Paramètres"
-              onPress={() => { }}
+              onPress={() => router.push('/screens/account/NotificationPreferences' as any)}
             />
           </View>
         </View>
+
 
         {/* LOGOUT */}
         <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
