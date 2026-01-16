@@ -1,6 +1,6 @@
 // screens/ride/SearchingDriver.tsx
 import React, { useEffect, useState } from 'react';
-import { SafeAreaView, StyleSheet, Text, View, TouchableOpacity, Alert, Dimensions, Image } from 'react-native';
+import { SafeAreaView, StyleSheet, Text, View, TouchableOpacity, Alert, Dimensions, Image, Linking } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { MapPlaceholder } from '../../components/MapPlaceholder';
 
@@ -39,10 +39,10 @@ import { useLocationStore } from '../../providers/LocationProvider';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getPusherClient, unsubscribeChannel } from '../../services/pusherClient';
-import { 
-  subscribeToNetworkChanges, 
+import {
+  subscribeToNetworkChanges,
   showNetworkErrorAlert,
-  checkNetworkConnection 
+  checkNetworkConnection
 } from '../../utils/networkHandler';
 
 if (Mapbox) {
@@ -118,16 +118,22 @@ const SearchingDots = () => {
 };
 
 // Timer de recherche
-const SearchTimer = () => {
+const SearchTimer = ({ onTimeout }: { onTimeout: () => void }) => {
   const [seconds, setSeconds] = useState(0);
 
   useEffect(() => {
-    const interval = setInterval(() => setSeconds(s => s + 1), 1000);
+    const interval = setInterval(() => {
+      setSeconds(s => {
+        const next = s + 1;
+        if (next === 300) onTimeout(); // 5 minutes
+        return next;
+      });
+    }, 1000);
     return () => clearInterval(interval);
   }, []);
 
   const mins = Math.floor(seconds / 60);
-  const secs = seconds % 60;
+  const secs = Math.floor(seconds % 60);
   const formatted = `${mins}:${secs.toString().padStart(2, '0')}`;
 
   return (
@@ -150,6 +156,7 @@ export default function SearchingDriver() {
   const [loadingDetails, setLoadingDetails] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [isOnline, setIsOnline] = useState(true);
+  const [hasTimedOut, setHasTimedOut] = useState(false);
 
   // Recovery logic: if we don't have origin/destination, fetch them from the ride
   useEffect(() => {
@@ -242,8 +249,12 @@ export default function SearchingDriver() {
 
         channel.bind('ride.cancelled', (payload: any) => {
           if (cancelled) return;
-          Alert.alert('Course annulée', 'Votre demande de course a été annulée.');
-          router.replace('/(tabs)');
+          if (payload?.reason === 'timeout_no_driver') {
+            setHasTimedOut(true);
+          } else {
+            Alert.alert('Course annulée', 'Votre demande de course a été annulée.');
+            router.replace('/(tabs)');
+          }
         });
       } catch (error) {
         console.warn('Realtime subscription failed', error);
@@ -372,7 +383,7 @@ export default function SearchingDriver() {
 
       {/* Timer en haut */}
       <SafeAreaView style={styles.topBar}>
-        <SearchTimer />
+        <SearchTimer onTimeout={() => setHasTimedOut(true)} />
         {!isOnline && (
           <View style={styles.offlineBadge}>
             <Ionicons name="cloud-offline" size={14} color={Colors.white} />
@@ -387,9 +398,19 @@ export default function SearchingDriver() {
           <View style={styles.infoHeader}>
             <View style={styles.searchingBadge}>
               <SearchingDots />
-              <Text style={styles.searchingText}>Recherche TIC</Text>
+              <Text style={styles.searchingText}>
+                {hasTimedOut ? 'Recherche expirée' : 'Recherche TIC'}
+              </Text>
             </View>
           </View>
+
+          {hasTimedOut && (
+            <View style={styles.timeoutMessage}>
+              <Text style={styles.timeoutText}>
+                Aucun chauffeur en ligne actuellement, contactez le support.
+              </Text>
+            </View>
+          )}
 
           {/* Détails du trajet */}
           <View style={styles.routeDetails}>
@@ -423,24 +444,51 @@ export default function SearchingDriver() {
         </View>
       </View>
 
-      {/* Bouton Annuler */}
+      {/* Bouton Annuler ou Support */}
       <SafeAreaView style={styles.footer}>
-        <Animated.View style={buttonStyle}>
-          <TouchableOpacity
-            style={styles.cancelButton}
-            onPress={handleCancel}
-            disabled={cancelling}
-            onPressIn={() => { buttonScale.value = withTiming(0.96, { duration: 100 }); }}
-            onPressOut={() => { buttonScale.value = withTiming(1, { duration: 100 }); }}
-            activeOpacity={0.9}
-          >
-            <Ionicons name="close-circle-outline" size={24} color="#ef4444" />
-            <Text style={styles.cancelText}>{cancelling ? 'Annulation...' : 'Annuler la recherche'}</Text>
-          </TouchableOpacity>
-        </Animated.View>
+        {hasTimedOut ? (
+          <View style={styles.supportButtons}>
+            <TouchableOpacity
+              style={[styles.supportButton, { backgroundColor: '#25D366' }]}
+              onPress={() => Linking.openURL('https://wa.me/2290157792662')}
+            >
+              <Ionicons name="logo-whatsapp" size={24} color="#fff" />
+              <Text style={styles.supportButtonText}>WhatsApp Support</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.supportButton, { backgroundColor: Colors.secondary }]}
+              onPress={() => Linking.openURL('tel:0157792662')}
+            >
+              <Ionicons name="call" size={24} color="#fff" />
+              <Text style={styles.supportButtonText}>Appeler Support</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.backButton}
+              onPress={() => router.replace('/(tabs)')}
+            >
+              <Text style={styles.backButtonText}>Retour à l'accueil</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <Animated.View style={buttonStyle}>
+            <TouchableOpacity
+              style={styles.cancelButton}
+              onPress={handleCancel}
+              disabled={cancelling}
+              onPressIn={() => { buttonScale.value = withTiming(0.96, { duration: 100 }); }}
+              onPressOut={() => { buttonScale.value = withTiming(1, { duration: 100 }); }}
+              activeOpacity={0.9}
+            >
+              <Ionicons name="close-circle-outline" size={24} color="#ef4444" />
+              <Text style={styles.cancelText}>{cancelling ? 'Annulation...' : 'Annuler la recherche'}</Text>
+            </TouchableOpacity>
+          </Animated.View>
+        )}
 
         <Text style={styles.footerHint}>
-          Nous vous préviendrons dès qu'un chauffeur accepte
+          {hasTimedOut ? 'Le support est disponible 24/7' : 'Nous vous préviendrons dès qu\'un chauffeur accepte'}
         </Text>
       </SafeAreaView>
     </View>
@@ -461,15 +509,15 @@ const styles = StyleSheet.create({
     paddingTop: 60,
     alignItems: 'center',
   },
-  offlineBadge: { 
+  offlineBadge: {
     position: 'absolute',
     top: 60,
     right: 20,
-    backgroundColor: '#F59E0B', 
+    backgroundColor: '#F59E0B',
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12, 
-    paddingVertical: 6, 
+    paddingHorizontal: 12,
+    paddingVertical: 6,
     borderRadius: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -478,9 +526,9 @@ const styles = StyleSheet.create({
     elevation: 5,
     zIndex: 1000,
   },
-  offlineText: { 
-    color: Colors.white, 
-    fontSize: 12, 
+  offlineText: {
+    color: Colors.white,
+    fontSize: 12,
     fontWeight: '600',
     marginLeft: 6,
     fontFamily: Fonts.titilliumWebBold,
@@ -688,5 +736,50 @@ const styles = StyleSheet.create({
     color: Colors.gray,
     textAlign: 'center',
     marginTop: 12,
+  },
+  timeoutMessage: {
+    backgroundColor: 'rgba(239,68,68,0.1)',
+    padding: 12,
+    borderRadius: 12,
+    marginVertical: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(239,68,68,0.2)',
+  },
+  timeoutText: {
+    fontFamily: Fonts.titilliumWebSemiBold,
+    fontSize: 14,
+    color: '#ef4444',
+    textAlign: 'center',
+  },
+  supportButtons: {
+    gap: 12,
+  },
+  supportButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    borderRadius: 16,
+    gap: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  supportButtonText: {
+    fontFamily: Fonts.titilliumWebBold,
+    fontSize: 16,
+    color: Colors.white,
+  },
+  backButton: {
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  backButtonText: {
+    fontFamily: Fonts.titilliumWebSemiBold,
+    fontSize: 14,
+    color: Colors.gray,
+    textDecorationLine: 'underline',
   },
 });
