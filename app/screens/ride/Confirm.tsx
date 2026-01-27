@@ -79,8 +79,10 @@ export default function ConfirmRide() {
   const [durationSeconds, setDurationSeconds] = useState<number | null>(null);
   const [vehicleType, setVehicleType] = useState<'standard' | 'vip'>('standard');
   const [hasBaggage, setHasBaggage] = useState(false);
+  const [luggageCount, setLuggageCount] = useState(0);
   const [routeGeometry, setRouteGeometry] = useState<any | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [nearbyDrivers, setNearbyDrivers] = useState<any[]>([]);
 
   const bottomSheetRef = useRef<BottomSheet>(null);
   const snapPoints = ['15%', '50%', '90%'];
@@ -133,6 +135,7 @@ export default function ConfirmRide() {
             pickup: { lat: origin.lat, lng: origin.lon },
             dropoff: { lat: destination.lat, lng: destination.lon },
             vehicle_type: vehicleType,
+            luggage_count: luggageCount,
           }),
         });
 
@@ -171,7 +174,34 @@ export default function ConfirmRide() {
       }
     };
     calculatePrice();
-  }, [origin, destination, vehicleType]);
+  }, [origin, destination, vehicleType, luggageCount]);
+
+  // Fetch nearby drivers
+  useEffect(() => {
+    if (!origin || !API_URL) return;
+
+    const fetchDrivers = async () => {
+      try {
+        const token = await AsyncStorage.getItem('authToken');
+        const res = await fetch(`${API_URL}/passenger/drivers/nearby?lat=${origin.lat}&lng=${origin.lon}&radius=5`, {
+          headers: {
+            Accept: 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setNearbyDrivers(data.drivers || []);
+        }
+      } catch (e) {
+        console.warn('Failed to fetch nearby drivers', e);
+      }
+    };
+
+    fetchDrivers();
+    const interval = setInterval(fetchDrivers, 10000); // Refresh every 10s
+    return () => clearInterval(interval);
+  }, [origin]);
 
   const paymentLabel = (m: ReturnType<typeof usePaymentStore>['method']) => {
     const labels = { cash: 'Espèces', mobile_money: 'Mobile Money', card: 'Carte', wallet: 'Portefeuille', qr: 'QR Code' };
@@ -284,6 +314,19 @@ export default function ConfirmRide() {
                 />
               </ShapeSource>
             )}
+
+            {/* Nearby Drivers Markers */}
+            {nearbyDrivers.map((d) => (
+              <PointAnnotation
+                key={`driver-${d.id}`}
+                id={`driver-${d.id}`}
+                coordinate={[Number(d.lng), Number(d.lat)]}
+              >
+                <View style={styles.driverMarkerContainer}>
+                  <MaterialCommunityIcons name="car" size={20} color={Colors.black} />
+                </View>
+              </PointAnnotation>
+            ))}
 
             {/* Origin Marker */}
             <PointAnnotation id="origin" coordinate={[origin.lon, origin.lat]}>
@@ -401,21 +444,34 @@ export default function ConfirmRide() {
             </View>
           </TouchableOpacity>
 
-          {/* Option bagages en dernier */}
-          <TouchableOpacity style={styles.optionCard} onPress={() => setHasBaggage(!hasBaggage)}>
+          <View style={styles.optionCard}>
             <View style={styles.optionRow}>
               <View style={styles.optionIcon}>
                 <MaterialCommunityIcons name="bag-personal" size={22} color={Colors.primary} />
               </View>
               <View style={styles.optionTextContainer}>
-                <Text style={styles.optionLabel}>Bagages</Text>
-                <Text style={styles.optionValue}>{hasBaggage ? 'Souhaitez-vous emmener des bagages ? Oui' : 'Pas de bagages'}</Text>
+                <Text style={styles.optionLabel}>Bagages Volumineux (100F/u)</Text>
+                <Text style={styles.optionValue}>
+                  {luggageCount === 0 ? 'Pas de bagages' : `${luggageCount} bagage${luggageCount > 1 ? 's' : ''}`}
+                </Text>
               </View>
-              <View style={[styles.checkbox, hasBaggage && styles.checkboxChecked]}>
-                {hasBaggage && <Ionicons name="checkmark" size={16} color="white" />}
+              <View style={styles.counterContainer}>
+                <TouchableOpacity
+                  onPress={() => setLuggageCount(Math.max(0, luggageCount - 1))}
+                  style={styles.counterBtn}
+                >
+                  <Ionicons name="remove" size={18} color={Colors.primary} />
+                </TouchableOpacity>
+                <Text style={styles.counterValue}>{luggageCount}</Text>
+                <TouchableOpacity
+                  onPress={() => setLuggageCount(Math.min(3, luggageCount + 1))}
+                  style={styles.counterBtn}
+                >
+                  <Ionicons name="add" size={18} color={Colors.primary} />
+                </TouchableOpacity>
               </View>
             </View>
-          </TouchableOpacity>
+          </View>
 
           <View style={styles.card}>
             <View style={styles.priceContainer}>
@@ -466,7 +522,8 @@ export default function ConfirmRide() {
                     passenger_name: passengerName,
                     passenger_phone: passengerPhone,
                     vehicle_type: vehicleType,
-                    has_baggage: hasBaggage,
+                    has_baggage: luggageCount > 0,
+                    luggage_count: luggageCount,
                     payment_method: method,
                     service_type: serviceType, // course, livraison, deplacement
                     ...(serviceType === 'livraison' && packageDetails ? {
@@ -650,4 +707,44 @@ const styles = StyleSheet.create({
 
   checkbox: { width: 24, height: 24, borderRadius: 12, borderWidth: 2, borderColor: Colors.lightGray, justifyContent: 'center', alignItems: 'center' },
   checkboxChecked: { backgroundColor: Colors.primary, borderColor: Colors.primary },
+  driverMarkerContainer: {
+    padding: 4,
+    backgroundColor: 'white',
+    borderRadius: 20,
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    borderWidth: 1,
+    borderColor: '#eee'
+  },
+  counterContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F1F5F9',
+    borderRadius: 12,
+    padding: 4,
+  },
+  counterBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: 'white',
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 1,
+  },
+  counterValue: {
+    fontFamily: Fonts.titilliumWebBold,
+    fontSize: 16,
+    color: Colors.black,
+    marginHorizontal: 15,
+    minWidth: 10,
+    textAlign: 'center',
+  },
 });

@@ -29,21 +29,43 @@ export default function CourseSection({ activeService }: { activeService?: strin
     lng?: number | null;
     type?: string | null;
   } | null>(null);
-  const ads = [
-    require('../../assets/images/tic1.jpg'),
-    require('../../assets/images/tic2.jpg'),
-    require('../../assets/images/tic3.jpg'),
-  ];
+  const [promotions, setPromotions] = useState<any[]>([]);
   const adsRef = useRef<ScrollView | null>(null);
   const currentIndexRef = useRef(0);
 
   useEffect(() => {
-    const id = setInterval(() => {
-      currentIndexRef.current = (currentIndexRef.current + 1) % ads.length;
-      adsRef.current?.scrollTo({ x: currentIndexRef.current * 232, animated: true });
-    }, 3000);
-    return () => clearInterval(id);
+    const fetchPromotions = async () => {
+      try {
+        const api = process.env.EXPO_PUBLIC_API_URL;
+        if (!api) return;
+        const res = await fetch(`${api}/promotions`);
+        if (res.ok) {
+          const data = await res.json();
+          setPromotions(data);
+        }
+      } catch (err) {
+        console.warn("Error fetching promotions:", err);
+      }
+    };
+    fetchPromotions();
   }, []);
+
+  useEffect(() => {
+    if (promotions.length <= 1) return;
+    const id = setInterval(() => {
+      currentIndexRef.current = (currentIndexRef.current + 1) % promotions.length;
+      adsRef.current?.scrollTo({ x: currentIndexRef.current * (280 + 16), animated: true });
+    }, 4000);
+    return () => clearInterval(id);
+  }, [promotions]);
+
+  const handlePromoPress = (promo: any) => {
+    if (promo.link_url) {
+      import('react-native').then(({ Linking }) => {
+        Linking.openURL(promo.link_url).catch(err => console.error("Couldn't load page", err));
+      });
+    }
+  };
 
   useEffect(() => {
     const api = process.env.EXPO_PUBLIC_API_URL;
@@ -218,56 +240,67 @@ export default function CourseSection({ activeService }: { activeService?: strin
       </View>
 
       {/* PROMO CAROUSEL */}
-      <View style={styles.promoSection}>
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Promotions & Infos</Text>
-          <TouchableOpacity onPress={() => router.push('/promos' as any)}>
-            <Text style={styles.seeAll}>Tout voir</Text>
-          </TouchableOpacity>
-        </View>
-        <View>
-          <ScrollView
-            horizontal
-            pagingEnabled
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.adsRow}
-            snapToInterval={280 + 16} // width + margin
-            decelerationRate="fast"
-            onScroll={(e) => {
-              const x = e.nativeEvent.contentOffset.x;
-              const idx = Math.round(x / (280 + 16));
-              setActiveAdIndex(idx);
-            }}
-            scrollEventThrottle={16}
-          >
-            {ads.map((src, idx) => (
-              <TouchableOpacity key={idx} style={styles.adWrapper} activeOpacity={0.95}>
-                <Image source={src} style={styles.adImage} resizeMode="cover" />
-                <LinearGradient
-                  colors={['transparent', 'rgba(0,0,0,0.7)']}
-                  style={styles.adGradient}
+      {promotions.length > 0 && (
+        <View style={styles.promoSection}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Promotions & Infos</Text>
+            <TouchableOpacity onPress={() => router.push('/promos' as any)}>
+              <Text style={styles.seeAll}>Tout voir</Text>
+            </TouchableOpacity>
+          </View>
+          <View>
+            <ScrollView
+              ref={adsRef}
+              horizontal
+              pagingEnabled
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.adsRow}
+              snapToInterval={280 + 16} // width + margin
+              decelerationRate="fast"
+              onScroll={(e) => {
+                const x = e.nativeEvent.contentOffset.x;
+                const idx = Math.round(x / (280 + 16));
+                setActiveAdIndex(idx);
+              }}
+              scrollEventThrottle={16}
+            >
+              {promotions.map((promo, idx) => (
+                <TouchableOpacity
+                  key={promo.id || idx}
+                  style={styles.adWrapper}
+                  activeOpacity={0.95}
+                  onPress={() => handlePromoPress(promo)}
                 >
-                  <Text style={styles.adTag}>NOUVEAU</Text>
-                  <Text style={styles.adText}>Découvrez nos nouveaux services VIP</Text>
-                </LinearGradient>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
+                  <Image source={{ uri: promo.image_url }} style={styles.adImage} resizeMode="cover" />
+                  <LinearGradient
+                    colors={['transparent', 'rgba(0,0,0,0.7)']}
+                    style={styles.adGradient}
+                  >
+                    <Text style={styles.adTag}>PROMO</Text>
+                    <Text style={styles.adText}>{promo.title}</Text>
+                    {promo.description ? <Text style={styles.adSubText} numberOfLines={1}>{promo.description}</Text> : null}
+                  </LinearGradient>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
 
-          {/* DOTS INDICATOR */}
-          <View style={styles.paginationDots}>
-            {ads.map((_, i) => (
-              <View
-                key={i}
-                style={[
-                  styles.dot,
-                  activeAdIndex === i && styles.dotActive
-                ]}
-              />
-            ))}
+            {/* DOTS INDICATOR */}
+            {promotions.length > 1 && (
+              <View style={styles.paginationDots}>
+                {promotions.map((_, i) => (
+                  <View
+                    key={i}
+                    style={[
+                      styles.dot,
+                      activeAdIndex === i && styles.dotActive
+                    ]}
+                  />
+                ))}
+              </View>
+            )}
           </View>
         </View>
-      </View>
+      )}
 
       {/* START RIDE ACTION (Visible when route set) */}
       {origin && destination && (
@@ -491,6 +524,12 @@ const styles = StyleSheet.create({
     color: Colors.white,
     fontFamily: Fonts.titilliumWebBold,
     fontSize: 16,
+  },
+  adSubText: {
+    color: 'rgba(255,255,255,0.8)',
+    fontFamily: Fonts.titilliumWeb,
+    fontSize: 12,
+    marginTop: 2,
   },
 
   startRideButton: {

@@ -20,6 +20,7 @@ interface UserInfo {
   name: string;
   phone: string;
   email: string;
+  photo?: string;
 }
 
 export default function AccountTab() {
@@ -42,7 +43,8 @@ export default function AccountTab() {
           setUser({
             name: data.name,
             phone: data.phone,
-            email: data.email
+            email: data.email,
+            photo: data.photo
           });
         }
       } catch (e) {
@@ -88,9 +90,13 @@ export default function AccountTab() {
         {/* PROFILE HEADER */}
         <View style={styles.header}>
           <View style={styles.avatarContainer}>
-            <View style={styles.avatarPlaceholder}>
-              <Text style={styles.avatarInitial}>{user?.name?.charAt(0) || 'U'}</Text>
-            </View>
+            {user?.photo ? (
+              <Image source={{ uri: user.photo }} style={styles.avatarImage} />
+            ) : (
+              <View style={styles.avatarPlaceholder}>
+                <Text style={styles.avatarInitial}>{user?.name?.charAt(0) || 'U'}</Text>
+              </View>
+            )}
             <TouchableOpacity
               style={styles.editAvatarBtn}
               onPress={() => router.push('/screens/account/EditProfile' as any)}
@@ -196,6 +202,13 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 15,
     elevation: 5
+  },
+  avatarImage: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    borderWidth: 4,
+    borderColor: Colors.white,
   },
   avatarInitial: {
     fontFamily: Fonts.titilliumWebBold,

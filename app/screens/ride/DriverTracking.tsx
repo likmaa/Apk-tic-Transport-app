@@ -31,6 +31,7 @@ import { Colors } from '../../theme';
 import { Fonts } from '../../font';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocationStore } from '../../providers/LocationProvider';
+import { useAuth } from '../../providers/AuthProvider';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { usePaymentStore } from '../../providers/PaymentProvider';
 import { haversineDistanceKm } from '../../utils/distance';
@@ -41,6 +42,7 @@ import {
   showNetworkErrorAlert,
   checkNetworkConnection
 } from '../../utils/networkHandler';
+import { useSmoothMarker } from '../../hooks/useSmoothMarker';
 
 if (Mapbox) {
   Mapbox.setAccessToken(process.env.EXPO_PUBLIC_MAPBOX_TOKEN || '');
@@ -155,6 +157,7 @@ export default function DriverTracking() {
   const rideId = route.params?.rideId;
   const initialDriver = route.params?.driver as { name?: string; phone?: string } | undefined;
   const { method, paymentStatus } = usePaymentStore();
+  const { token } = useAuth();
 
   const cameraRef = React.useRef<any>(null);
 
@@ -182,6 +185,10 @@ export default function DriverTracking() {
   const [cancelling, setCancelling] = React.useState(false);
   const [isOnline, setIsOnline] = React.useState(true);
   const [arrivedAt, setArrivedAt] = React.useState<string | null>(null);
+  const [lastUpdateAt, setLastUpdateAt] = React.useState<number>(Date.now());
+  const [isPolling, setIsPolling] = React.useState(false);
+
+  const { lat: smoothLat, lng: smoothLng } = useSmoothMarker(driverPos);
 
   const handleCancel = () => {
     if (!rideId) return;
@@ -359,48 +366,44 @@ export default function DriverTracking() {
     return unsubscribe;
   }, [isOnline, rideId, driverPos, rideStatus]);
 
-  // Fallback polling pour la position du chauffeur (seulement si WebSocket échoue)
-  // NOTE: Le WebSocket via Pusher devrait gérer la position en temps réel
-  // Ce polling n'est qu'un fallback de sécurité toutes les 30 secondes
+  // Fallback Polling
   React.useEffect(() => {
     if (!rideId || !API_URL || !isOnline) return;
 
-    let cancelled = false;
-    let lastWebSocketUpdate = Date.now();
+    const interval = setInterval(async () => {
+      const timeSinceLastUpdate = Date.now() - lastUpdateAt;
 
-    // Vérifier périodiquement si le WebSocket fonctionne
-    // Si pas de mise à jour depuis 30s, faire un polling de fallback
-    const fallbackInterval = setInterval(async () => {
-      const timeSinceLastUpdate = Date.now() - lastWebSocketUpdate;
-
-      // Si pas de mise à jour depuis 30s, faire un appel API de fallback
-      if (timeSinceLastUpdate > 30000) {
+      // If no update for 20 seconds, poll
+      if (timeSinceLastUpdate > 20000) {
+        setIsPolling(true);
         try {
           const token = await AsyncStorage.getItem('authToken');
           const res = await fetch(`${API_URL}/passenger/rides/${rideId}/driver-location`, {
             headers: {
               Accept: 'application/json',
-              ...(token ? { Authorization: `Bearer ${token}` } : {}),
+              Authorization: `Bearer ${token}`,
             },
           });
           if (res.ok) {
-            const json = await res.json();
-            if (typeof json?.lat === 'number' && typeof json?.lng === 'number' && !cancelled) {
-              setDriverPos({ latitude: json.lat, longitude: json.lng });
-              lastWebSocketUpdate = Date.now();
+            const data = await res.json();
+            if (data.lat && data.lng) {
+              setDriverPos({
+                latitude: Number(data.lat),
+                longitude: Number(data.lng),
+              });
+              setLastUpdateAt(Date.now());
             }
           }
-        } catch {
-          // ignore
+        } catch (e) {
+          console.warn('Fallback polling failed', e);
+        } finally {
+          setIsPolling(false);
         }
       }
-    }, 30000); // Vérifier toutes les 30 secondes
+    }, 5000); // Check every 5s
 
-    return () => {
-      cancelled = true;
-      clearInterval(fallbackInterval);
-    };
-  }, [rideId, API_URL, isOnline]);
+    return () => clearInterval(interval);
+  }, [rideId, token, lastUpdateAt, API_URL, isOnline]);
 
   // Recenter map logic
   React.useEffect(() => {
@@ -434,8 +437,7 @@ export default function DriverTracking() {
               latitude: payload.lat,
               longitude: payload.lng,
             });
-            // Mettre à jour le timestamp pour le fallback polling
-            (window as any)._lastDriverLocationUpdate = Date.now();
+            setLastUpdateAt(Date.now());
           }
           if (typeof payload?.eta_minutes === 'number') {
             setEtaMin(payload.eta_minutes);
@@ -461,10 +463,16 @@ export default function DriverTracking() {
           navigation.navigate({
             name: 'screens/ride/RideReceipt',
             params: {
+              rideId: String(rideId),
               amount: payload.fare_amount || 0,
               distanceKm: (payload.distance_m || 0) / 1000,
               vehicleName: vehicleNameParam || 'Véhicule',
               paymentMethod: method,
+              breakdown: payload.breakdown, // Pass the breakdown
+              pickupLat: pickupPos?.latitude,
+              pickupLng: pickupPos?.longitude,
+              dropoffLat: destinationPos?.latitude,
+              dropoffLng: destinationPos?.longitude,
             }
           } as never);
         });
@@ -544,7 +552,7 @@ export default function DriverTracking() {
           />
 
           {driverPos && (
-            <PointAnnotation id="driver" coordinate={[driverPos.longitude, driverPos.latitude]}>
+            <PointAnnotation id="driver" coordinate={[smoothLng.value, smoothLat.value]}>
               <View style={styles.markerContainer}>
                 <Ionicons name="car" size={24} color={Colors.black} />
               </View>
@@ -587,6 +595,13 @@ export default function DriverTracking() {
         <View style={styles.offlineBadge}>
           <Ionicons name="cloud-offline" size={14} color={Colors.white} />
           <Text style={styles.offlineText}>Hors ligne</Text>
+        </View>
+      )}
+
+      {isOnline && (
+        <View style={[styles.statusBadge, isPolling ? styles.pollingBadge : styles.liveBadge]}>
+          <View style={[styles.pulseCircle, isPolling ? styles.pollingCircle : styles.liveCircle]} />
+          <Text style={styles.statusText}>{isPolling ? 'Mise à jour (API)...' : 'Temps réel'}</Text>
         </View>
       )}
 
@@ -712,5 +727,37 @@ const styles = StyleSheet.create({
   cancelBtn: { marginTop: 12, backgroundColor: '#f97316', borderRadius: 12, alignItems: 'center', paddingVertical: 12, marginBottom: 4 },
   cancelText: { color: Colors.white, fontFamily: Fonts.titilliumWebBold },
   backOverlay: { position: 'absolute', top: 24, left: 16, width: 40, height: 40, borderRadius: 20, backgroundColor: Colors.white, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2, elevation: 2 },
-  markerContainer: { padding: 4, backgroundColor: 'white', borderRadius: 20, elevation: 5 }
+  markerContainer: { padding: 4, backgroundColor: 'white', borderRadius: 20, elevation: 5 },
+  statusBadge: {
+    position: 'absolute',
+    top: 50,
+    right: 20,
+    zIndex: 1000,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  liveBadge: { backgroundColor: 'rgba(34, 197, 94, 0.9)' },
+  pollingBadge: { backgroundColor: 'rgba(245, 158, 11, 0.9)' },
+  statusText: {
+    color: Colors.white,
+    fontSize: 11,
+    fontWeight: '600',
+    marginLeft: 6,
+    fontFamily: Fonts.titilliumWebBold,
+  },
+  pulseCircle: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  liveCircle: { backgroundColor: '#bef264' },
+  pollingCircle: { backgroundColor: '#fef3c7' },
 });

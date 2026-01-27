@@ -16,6 +16,7 @@ import {
   showNetworkErrorAlert,
   checkNetworkConnection
 } from '../../utils/networkHandler';
+import { useSmoothMarker } from '../../hooks/useSmoothMarker';
 
 // Tentative d'importation sécurisée de Mapbox
 let Mapbox: any = null;
@@ -66,6 +67,10 @@ export default function OngoingRide() {
   const [stopStartedAt, setStopStartedAt] = React.useState<string | null>(null);
   const [totalStopDurationS, setTotalStopDurationS] = React.useState<number>(0);
   const [liveStopSeconds, setLiveStopSeconds] = React.useState<number>(0);
+  const [lastUpdateAt, setLastUpdateAt] = React.useState<number>(Date.now());
+  const [isPolling, setIsPolling] = React.useState(false);
+
+  const { lat: smoothLat, lng: smoothLng } = useSmoothMarker(driverPos);
 
   const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
@@ -112,6 +117,7 @@ export default function OngoingRide() {
               latitude: payload.lat,
               longitude: payload.lng,
             });
+            setLastUpdateAt(Date.now());
           }
         });
 
@@ -121,7 +127,6 @@ export default function OngoingRide() {
           setTotalStopDurationS(payload.total_stop_duration_s || 0);
         });
 
-        // Listen for completion
         channel.bind('ride.completed', (payload: any) => {
           if (cancelled) return;
           router.replace({
@@ -131,11 +136,13 @@ export default function OngoingRide() {
               amount: payload.fare_amount || rideData?.fare_amount || 0,
               distanceKm: (payload.distance_m || rideData?.distance_m || 0) / 1000,
               vehicleName,
+              breakdown: payload.breakdown ? JSON.stringify(payload.breakdown) : undefined, // Pass stringified breakdown
               // Pass coordinates for Map display
               pickupLat: origin?.lat || rideData?.pickup_lat || 0,
               pickupLng: origin?.lon || rideData?.pickup_lng || 0,
               dropoffLat: destination?.lat || rideData?.dropoff_lat || 0,
               dropoffLng: destination?.lon || rideData?.dropoff_lng || 0,
+              paymentMethod: rideData?.payment_method || 'cash',
             }
           });
         });
@@ -154,6 +161,44 @@ export default function OngoingRide() {
       }
     };
   }, [rideId, token, rideData, vehicleName, router]);
+
+  // Fallback Polling
+  React.useEffect(() => {
+    if (!rideId || !token || !API_URL) return;
+
+    const interval = setInterval(async () => {
+      const timeSinceLastUpdate = Date.now() - lastUpdateAt;
+
+      // If no update for 20 seconds, poll
+      if (timeSinceLastUpdate > 20000) {
+        setIsPolling(true);
+        try {
+          const res = await fetch(`${API_URL}/passenger/rides/${rideId}/driver-location`, {
+            headers: {
+              Accept: 'application/json',
+              Authorization: `Bearer ${token}`,
+            },
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (data.lat && data.lng) {
+              setDriverPos({
+                latitude: Number(data.lat),
+                longitude: Number(data.lng),
+              });
+              setLastUpdateAt(Date.now());
+            }
+          }
+        } catch (e) {
+          console.warn('Fallback polling failed', e);
+        } finally {
+          setIsPolling(false);
+        }
+      }
+    }, 5000); // Check every 5s
+
+    return () => clearInterval(interval);
+  }, [rideId, token, lastUpdateAt, API_URL]);
 
   // Surveiller la connexion réseau
   React.useEffect(() => {
@@ -307,6 +352,13 @@ export default function OngoingRide() {
         </View>
       )}
 
+      {isOnline && (
+        <View style={[styles.statusBadge, isPolling ? styles.pollingBadge : styles.liveBadge]}>
+          <View style={[styles.pulseCircle, isPolling ? styles.pollingCircle : styles.liveCircle]} />
+          <Text style={styles.statusText}>{isPolling ? 'Mise à jour (API)...' : 'Temps réel'}</Text>
+        </View>
+      )}
+
       {/* Carte en plein écran */}
       <View style={StyleSheet.absoluteFill}>
         {Mapbox ? (
@@ -334,7 +386,7 @@ export default function OngoingRide() {
             )}
 
             {driverPos && (
-              <PointAnnotation id="driver" coordinate={[driverPos.longitude, driverPos.latitude]}>
+              <PointAnnotation id="driver" coordinate={[smoothLng.value, smoothLat.value]}>
                 <View style={styles.markerContainer}>
                   <MaterialCommunityIcons name="car" size={20} color={Colors.black} />
                 </View>
@@ -466,6 +518,38 @@ const styles = StyleSheet.create({
     marginLeft: 6,
     fontFamily: Fonts.titilliumWebBold,
   },
+  statusBadge: {
+    position: 'absolute',
+    top: 50,
+    right: 20,
+    zIndex: 1000,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  liveBadge: { backgroundColor: 'rgba(34, 197, 94, 0.9)' },
+  pollingBadge: { backgroundColor: 'rgba(245, 158, 11, 0.9)' },
+  statusText: {
+    color: Colors.white,
+    fontSize: 11,
+    fontWeight: '600',
+    marginLeft: 6,
+    fontFamily: Fonts.titilliumWebBold,
+  },
+  pulseCircle: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  liveCircle: { backgroundColor: '#bef264' },
+  pollingCircle: { backgroundColor: '#fef3c7' },
   topHeader: { position: 'absolute', top: 50, left: 20, right: 20, backgroundColor: 'rgba(255,255,255,0.9)', padding: 16, borderRadius: 16, borderLeftWidth: 4, borderLeftColor: Colors.primary },
   headerTitle: { fontFamily: Fonts.titilliumWebBold, fontSize: 22, color: Colors.black },
   headerSub: { fontFamily: Fonts.titilliumWeb, fontSize: 14, color: Colors.gray },

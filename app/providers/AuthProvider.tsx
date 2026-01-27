@@ -83,6 +83,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setUser(newUser);
             await AsyncStorage.setItem('authToken', newToken);
             await AsyncStorage.setItem('authUser', JSON.stringify(newUser));
+
+            // Register Push Notifications
+            try {
+                const { registerForPushNotificationsAsync, registerTokenWithBackend } = require('../utils/notificationHandler');
+                const fcmToken = await registerForPushNotificationsAsync();
+                if (fcmToken) {
+                    await registerTokenWithBackend(fcmToken, newToken);
+                }
+            } catch (notifyErr) {
+                console.warn('Push registration failed (skip if dev environment)', notifyErr);
+            }
         } catch (e) {
             console.error('Sign in error', e);
         }

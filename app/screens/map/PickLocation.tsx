@@ -1,6 +1,7 @@
 // screens/map/PickLocation.tsx
 import React, { useEffect, useRef, useState } from 'react';
 import { SafeAreaView, StyleSheet, Text, View, TouchableOpacity, TextInput, ActivityIndicator, Alert, Modal, KeyboardAvoidingView, Platform, Dimensions } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming, interpolate } from 'react-native-reanimated';
 import { FlatList } from 'react-native-gesture-handler';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -127,6 +128,7 @@ export default function PickLocationScreen() {
   const [passengerName, setPassengerName] = useState('');
   const [passengerPhone, setPassengerPhone] = useState('');
   const [isPassengerModalVisible, setIsPassengerModalVisible] = useState(false);
+  const [nearbyDrivers, setNearbyDrivers] = useState<any[]>([]);
 
   const bottomSheetRef = useRef<BottomSheet>(null);
   const snapPoints = ['35%', '60%', '95%'];
@@ -220,6 +222,33 @@ export default function PickLocationScreen() {
     }, 400);
     return () => clearTimeout(timeoutId);
   }, [search, origin]);
+
+  // Fetch nearby drivers
+  useEffect(() => {
+    if (!origin || !API_URL) return;
+
+    const fetchDrivers = async () => {
+      try {
+        const token = await AsyncStorage.getItem('authToken');
+        const res = await fetch(`${API_URL}/passenger/drivers/nearby?lat=${origin.lat}&lng=${origin.lon}&radius=5`, {
+          headers: {
+            Accept: 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+        });
+        if (res.ok) {
+          const json = await res.json();
+          setNearbyDrivers(json.drivers || []);
+        }
+      } catch (err) {
+        console.warn('Error fetching nearby drivers:', err);
+      }
+    };
+
+    fetchDrivers();
+    const interval = setInterval(fetchDrivers, 10000); // Refresh every 10s
+    return () => clearInterval(interval);
+  }, [origin, API_URL]);
 
   // Fonction pour gérer la sélection d'une destination
   const handleSelectDestination = (location: { address: string; lat: number; lon: number; }) => {
@@ -342,6 +371,18 @@ export default function PickLocationScreen() {
                 </View>
               </PointAnnotation>
             )}
+
+            {nearbyDrivers.map((driver) => (
+              <PointAnnotation
+                key={driver.id}
+                id={`driver-${driver.id}`}
+                coordinate={[Number(driver.lng), Number(driver.lat)]}
+              >
+                <View style={styles.nearbyDriverMarker}>
+                  <MaterialCommunityIcons name="car-side" size={16} color={Colors.black} />
+                </View>
+              </PointAnnotation>
+            ))}
           </MapView>
         ) : (
           <View style={[StyleSheet.absoluteFill, { backgroundColor: '#e5e7eb', justifyContent: 'center', alignItems: 'center' }]}>
@@ -704,6 +745,18 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: -9,
     alignSelf: 'center',
+  },
+  nearbyDriverMarker: {
+    padding: 3,
+    backgroundColor: 'white',
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: '#eee',
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
   },
   originMarkerInner: {
     width: 16,

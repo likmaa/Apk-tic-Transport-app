@@ -101,6 +101,22 @@ export default function HomeTab() {
                 driver: JSON.stringify(ride.driver)
               }
             });
+          } else if (ride.status === 'completed') {
+            router.replace({
+              pathname: '/screens/ride/RideReceipt',
+              params: {
+                rideId: String(ride.id),
+                amount: ride.fare_amount || 0,
+                distanceKm: (ride.distance_m || 0) / 1000,
+                vehicleName: ride.vehicle_type === 'vip' ? 'VIP' : 'Standard',
+                paymentMethod: ride.payment_method || 'cash',
+                breakdown: ride.breakdown ? JSON.stringify(ride.breakdown) : undefined,
+                pickupLat: ride.pickup_lat,
+                pickupLng: ride.pickup_lng,
+                dropoffLat: ride.dropoff_lat,
+                dropoffLng: ride.dropoff_lng
+              }
+            });
           }
         }
       } catch (err) {

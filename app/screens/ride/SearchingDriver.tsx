@@ -157,6 +157,7 @@ export default function SearchingDriver() {
   const [cancelling, setCancelling] = useState(false);
   const [isOnline, setIsOnline] = useState(true);
   const [hasTimedOut, setHasTimedOut] = useState(false);
+  const [nearbyDrivers, setNearbyDrivers] = useState<any[]>([]);
 
   // Recovery logic: if we don't have origin/destination, fetch them from the ride
   useEffect(() => {
@@ -213,6 +214,33 @@ export default function SearchingDriver() {
       params: { rideId: String(rideId) }
     });
   };
+
+  // Fetch nearby drivers
+  useEffect(() => {
+    if (!origin || !API_URL || assignmentReceived) return;
+
+    const fetchDrivers = async () => {
+      try {
+        const token = await AsyncStorage.getItem('authToken');
+        const res = await fetch(`${API_URL}/passenger/drivers/nearby?lat=${origin.lat}&lng=${origin.lon}&radius=5`, {
+          headers: {
+            Accept: 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setNearbyDrivers(data.drivers || []);
+        }
+      } catch (e) {
+        console.warn('Failed to fetch nearby drivers', e);
+      }
+    };
+
+    fetchDrivers();
+    const interval = setInterval(fetchDrivers, 30000); // Refresh every 30s
+    return () => clearInterval(interval);
+  }, [origin, assignmentReceived]);
 
   useEffect(() => {
     let channel: any = null;
@@ -288,48 +316,7 @@ export default function SearchingDriver() {
     return unsubscribe;
   }, [isOnline, rideId]);
 
-  useEffect(() => {
-    if (!rideId || !API_URL || assignmentReceived) return;
 
-    let cancelled = false;
-    let abortController: AbortController | null = null;
-
-    const waitForAssignment = async () => {
-      while (!cancelled && !assignmentReceived) {
-        try {
-          abortController = new AbortController();
-          const token = await AsyncStorage.getItem('authToken');
-          const res = await fetch(`${API_URL}/passenger/rides/${rideId}/wait-assignment?timeout=25`, {
-            headers: {
-              Accept: 'application/json',
-              ...(token ? { Authorization: `Bearer ${token}` } : {}),
-            },
-            signal: abortController.signal,
-          });
-
-          if (cancelled) return;
-
-          if (res.status === 200) {
-            setAssignmentReceived(true);
-            router.replace({
-              pathname: '/screens/ride/DriverTracking',
-              params: { vehicleName, rideId: String(rideId) },
-            });
-            return;
-          }
-        } catch (error: any) {
-          if (error?.name === 'AbortError') return;
-        }
-      }
-    };
-
-    waitForAssignment();
-
-    return () => {
-      cancelled = true;
-      abortController?.abort();
-    };
-  }, [API_URL, rideId, router, vehicleName, assignmentReceived]);
 
   return (
     <View style={styles.container}>
@@ -351,6 +338,18 @@ export default function SearchingDriver() {
                 zoomLevel: 15
               }}
             />
+            {/* Nearby Drivers Markers */}
+            {nearbyDrivers.map((d) => (
+              <Mapbox.PointAnnotation
+                key={`driver-${d.id}`}
+                id={`driver-${d.id}`}
+                coordinate={[Number(d.lng), Number(d.lat)]}
+              >
+                <View style={styles.driverMarkerContainer}>
+                  <MaterialCommunityIcons name="car" size={18} color={Colors.black} />
+                </View>
+              </Mapbox.PointAnnotation>
+            ))}
           </MapView>
         ) : (
           <MapPlaceholder style={StyleSheet.absoluteFill} />
@@ -781,5 +780,17 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: Colors.gray,
     textDecorationLine: 'underline',
+  },
+  driverMarkerContainer: {
+    padding: 3,
+    backgroundColor: 'white',
+    borderRadius: 15,
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    borderWidth: 1,
+    borderColor: '#eee'
   },
 });

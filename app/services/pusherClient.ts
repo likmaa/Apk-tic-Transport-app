@@ -41,6 +41,8 @@ async function buildClient(token: string) {
         Accept: 'application/json',
       },
     },
+    activityTimeout: 30000, // Detect dead connection faster (30s)
+    pongTimeout: 10000,     // Wait 10s for pong
   });
 
   currentToken = token;

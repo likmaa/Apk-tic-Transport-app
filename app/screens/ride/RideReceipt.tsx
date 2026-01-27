@@ -24,6 +24,7 @@ type RootParams = {
     dropoffLat?: number;
     dropoffLng?: number;
     paymentMethod?: string;
+    breakdown?: any;
   } | undefined;
 };
 
@@ -41,6 +42,18 @@ export default function RideReceipt() {
   const [tip, setTip] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [paymentVerified, setPaymentVerified] = useState(false);
+  const [coords, setCoords] = useState<Array<{ latitude: number; longitude: number }>>([]);
+
+  const breakdownRaw = route.params?.breakdown;
+  const breakdown = React.useMemo(() => {
+    if (!breakdownRaw) return null;
+    try {
+      return typeof breakdownRaw === 'string' ? JSON.parse(breakdownRaw) : breakdownRaw;
+    } catch (e) {
+      console.warn('Failed to parse breakdown', e);
+      return null;
+    }
+  }, [breakdownRaw]);
 
   const isMounted = useRef(true);
 
@@ -88,13 +101,43 @@ export default function RideReceipt() {
   const dropoffLng = Number(route.params?.dropoffLng ?? 0);
 
   const { serviceType } = useServiceStore();
-  const base = amount > 800 ? 800 : amount;
-  const other = amount - base;
+
 
   const tipOptions = [200, 500, 1000, 2000];
 
   // Center map on path
   const center = (pickupLat && dropoffLat) ? [(pickupLng + dropoffLng) / 2, (pickupLat + dropoffLat) / 2] : undefined;
+
+  useEffect(() => {
+    if (!pickupLat || !dropoffLat) return;
+    (async () => {
+      try {
+        const url = `https://router.project-osrm.org/route/v1/driving/${pickupLng},${pickupLat};${dropoffLng},${dropoffLat}?overview=full&geometries=geojson`;
+        const res = await fetch(url);
+        const data = await res.json();
+        const geometry = data?.routes?.[0]?.geometry?.coordinates as Array<[number, number]> | undefined;
+        if (geometry && geometry.length) {
+          setCoords(geometry.map(([lon, lat]) => ({ latitude: lat, longitude: lon })));
+        } else {
+          setCoords([{ latitude: pickupLat, longitude: pickupLng }, { latitude: dropoffLat, longitude: dropoffLng }]);
+        }
+      } catch {
+        setCoords([{ latitude: pickupLat, longitude: pickupLng }, { latitude: dropoffLat, longitude: dropoffLng }]);
+      }
+    })();
+  }, [pickupLat, dropoffLat, pickupLng, dropoffLng]);
+
+  const routeLine = React.useMemo(() => {
+    if (coords.length < 2) return null;
+    return {
+      type: 'Feature',
+      properties: {},
+      geometry: {
+        type: 'LineString',
+        coordinates: coords.map(c => [c.longitude, c.latitude])
+      }
+    };
+  }, [coords]);
 
   const handleSubmitRating = async () => {
     if (!rideId) {
@@ -149,6 +192,20 @@ export default function RideReceipt() {
             <PointAnnotation id="dropoff" coordinate={[dropoffLng, dropoffLat]}>
               <View style={[styles.dot, { backgroundColor: Colors.secondary }]} />
             </PointAnnotation>
+            {routeLine && (
+              <ShapeSource id="routeSource" shape={routeLine as any}>
+                <LineLayer
+                  id="routeFill"
+                  style={{
+                    lineColor: Colors.primary,
+                    lineWidth: 4,
+                    lineOpacity: 0.6,
+                    lineCap: 'round',
+                    lineJoin: 'round',
+                  }}
+                />
+              </ShapeSource>
+            )}
           </MapView>
         ) : (
           <MapPlaceholder style={StyleSheet.absoluteFill} />
@@ -183,6 +240,44 @@ export default function RideReceipt() {
                 <Text style={styles.statLabel}>Prix</Text>
                 <Text style={styles.statValue}>{(amount).toLocaleString('fr-FR')}</Text>
               </View>
+            </View>
+
+            <View style={styles.divider} />
+
+            {/* BREAKDOWN SECTION */}
+            <View style={styles.breakdownContainer}>
+              <Text style={styles.sectionTitle}>Détails de la tarification</Text>
+
+              <View style={styles.breakdownRow}>
+                <Text style={styles.breakdownLabel}>Prix de base (Prise en charge)</Text>
+                <Text style={styles.breakdownValue}>{breakdown?.base_fare?.toLocaleString('fr-FR') || '--'} FCFA</Text>
+              </View>
+
+              <View style={styles.breakdownRow}>
+                <Text style={styles.breakdownLabel}>Distance ({distanceKm.toFixed(1)} km)</Text>
+                <Text style={styles.breakdownValue}>{breakdown?.distance_fare?.toLocaleString('fr-FR') || '--'} FCFA</Text>
+              </View>
+
+              {breakdown?.luggage_fare > 0 && (
+                <View style={styles.breakdownRow}>
+                  <Text style={styles.breakdownLabel}>Frais de bagages ({breakdown?.luggage_count})</Text>
+                  <Text style={styles.breakdownValue}>{breakdown?.luggage_fare?.toLocaleString('fr-FR')} FCFA</Text>
+                </View>
+              )}
+
+              {breakdown?.stop_fare > 0 && (
+                <View style={styles.breakdownRow}>
+                  <Text style={styles.breakdownLabel}>Frais d'attente</Text>
+                  <Text style={styles.breakdownValue}>{breakdown?.stop_fare?.toLocaleString('fr-FR')} FCFA</Text>
+                </View>
+              )}
+
+              {breakdown?.surge_multiplier > 1 && (
+                <View style={styles.breakdownRow}>
+                  <Text style={styles.breakdownLabel}>Majoration (x{breakdown?.surge_multiplier})</Text>
+                  <Text style={styles.breakdownValue}>Inclus</Text>
+                </View>
+              )}
             </View>
 
             <View style={styles.divider} />
@@ -277,6 +372,8 @@ let Mapbox: any = null;
 let MapView: any = View;
 let Camera: any = View;
 let PointAnnotation: any = View;
+let ShapeSource: any = View;
+let LineLayer: any = View;
 
 try {
   const MB = require('@rnmapbox/maps');
@@ -284,6 +381,8 @@ try {
   MapView = MB.MapView;
   Camera = MB.Camera;
   PointAnnotation = MB.PointAnnotation;
+  ShapeSource = MB.ShapeSource;
+  LineLayer = MB.LineLayer;
 
   if (Mapbox && typeof Mapbox.setAccessToken === 'function') {
     Mapbox.setAccessToken(process.env.EXPO_PUBLIC_MAPBOX_TOKEN || '');
@@ -330,9 +429,15 @@ const styles = StyleSheet.create({
   tipAmount: { fontFamily: Fonts.titilliumWebSemiBold, color: Colors.black, fontSize: 14 },
   tipAmountActive: { color: Colors.white },
 
-  detailsRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
+  detailsRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, marginTop: 10 },
   totalLabel: { fontFamily: Fonts.titilliumWebBold, color: Colors.black, fontSize: 18 },
   totalValue: { fontFamily: Fonts.titilliumWebBold, color: Colors.primary, fontSize: 22 },
+
+  breakdownContainer: { width: '100%', gap: 12 },
+  sectionTitle: { fontFamily: Fonts.titilliumWebBold, fontSize: 14, color: Colors.gray, marginBottom: 4, textTransform: 'uppercase' },
+  breakdownRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  breakdownLabel: { fontFamily: Fonts.titilliumWeb, fontSize: 14, color: Colors.black },
+  breakdownValue: { fontFamily: Fonts.titilliumWebSemiBold, fontSize: 14, color: Colors.black },
 
   primaryBtn: { backgroundColor: Colors.primary, paddingVertical: 16, borderRadius: 16, alignItems: 'center', shadowColor: Colors.primary, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 5 },
   primaryText: { color: Colors.white, fontFamily: Fonts.titilliumWebBold, fontSize: 16 },
