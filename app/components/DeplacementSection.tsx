@@ -25,7 +25,7 @@ export default function DeplacementSection() {
   const [showEmbarkModal, setShowEmbarkModal] = useState(false);
   const [mode, setMode] = useState<'origin' | 'destination'>('origin');
 
-  const { lines } = useLines();
+  const { lines, stops } = useLines();
   const [selectedLineId, setSelectedLineId] = useState<number | null>(null);
   const [fromStopId, setFromStopId] = useState<number | null>(null);
   const [toStopId, setToStopId] = useState<number | null>(null);
@@ -50,19 +50,25 @@ export default function DeplacementSection() {
     }
   };
 
-  const selectedLine = selectedLineId
-    ? lines.find(l => l.id === selectedLineId)
-    : (lines.length > 0 ? lines[0] : undefined);
+  // Ensure a line is selected by default once lines are loaded
+  React.useEffect(() => {
+    if (lines.length > 0 && !selectedLineId) {
+      setSelectedLineId(lines[0].id);
+    }
+  }, [lines, selectedLineId]);
 
-  if (!selectedLineId && selectedLine) {
-    setSelectedLineId(selectedLine.id);
-  }
+  const selectedLine = lines.find(l => l.id === selectedLineId) || (lines.length > 0 ? lines[0] : undefined);
 
-  const lineStops = selectedLine?.stops ?? [];
+  // Fallback: if the selected line has no stops, we can show all available stops
+  const lineStops = (selectedLine?.stops && selectedLine.stops.length > 0)
+    ? selectedLine.stops
+    : (stops || []);
 
-  const handleSelectPoint = (item: { id: number; name: string; lat?: number | null; lng?: number | null }) => {
-    const lat = typeof item.lat === 'number' ? item.lat : 0;
-    const lng = typeof item.lng === 'number' ? item.lng : 0;
+  const handleSelectPoint = (item: any) => {
+    // Try to find full coordinates in the global stops list if missing
+    const fullStop = stops.find(s => s.id === item.id) || item;
+    const lat = typeof fullStop.lat === 'number' ? fullStop.lat : 0;
+    const lng = typeof fullStop.lng === 'number' ? (fullStop.lng || fullStop.lon || 0) : 0;
 
     if (mode === 'origin') {
       setOrigin({ address: item.name, lat, lon: lng });
@@ -253,7 +259,7 @@ export default function DeplacementSection() {
               <Text style={styles.myLocationText}>Ma position actuelle</Text>
             </TouchableOpacity>
             <FlatList
-              data={lineStops}
+              data={lineStops as any[]}
               keyExtractor={item => String(item.id)}
               renderItem={({ item }) => (
                 <TouchableOpacity

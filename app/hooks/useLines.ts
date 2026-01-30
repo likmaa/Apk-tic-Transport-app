@@ -47,12 +47,16 @@ export function useLines() {
 
         if (stopsRes.ok) {
           const s = await stopsRes.json();
-          setStops(Array.isArray(s) ? s : []);
+          const stopsArray = Array.isArray(s) ? s : (s && Array.isArray(s.data) ? s.data : []);
+          setStops(stopsArray);
         }
         if (linesRes.ok) {
           const l = await linesRes.json();
-          setLines(Array.isArray(l) ? l : []);
+          const linesArray = Array.isArray(l) ? l : (l && Array.isArray(l.data) ? l.data : []);
+          setLines(linesArray);
         }
+      } catch (e) {
+        console.error('Error fetching lines/stops:', e);
       } finally {
         setLoading(false);
       }

@@ -18,7 +18,7 @@ export default function Walkthrough1() {
   return (
     <View style={styles.container}>
       <Image
-        source={require("../../assets/images/tic1.jpg")}
+        source={require("../../assets/images/image-b10.jpg")}
         style={styles.backgroundImage}
         resizeMode="cover"
       />
@@ -66,7 +66,8 @@ const styles = StyleSheet.create({
   backgroundImage: {
     ...StyleSheet.absoluteFillObject,
     width: "100%",
-    height: "93%",
+    height: "100%",
+    transform: [{ scale: 1.2 }], // Ajout du zoom
   },
   gradientOverlay: {
     position: "absolute",
