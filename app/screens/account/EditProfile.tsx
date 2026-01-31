@@ -25,11 +25,13 @@ export default function EditProfile() {
           if (user.email) setEmail(user.email);
           if (user.phone) setPhone(user.phone);
           const storedAvatar = user.photo || user.avatar || user.avatar_url || user.photoUrl;
-          if (storedAvatar) {
+          if (storedAvatar && API_URL) {
             let finalAvatar = String(storedAvatar);
-            if (!finalAvatar.startsWith('http') && !finalAvatar.startsWith('file://') && API_URL) {
-              finalAvatar = `${API_URL.replace('/api', '')}/storage/${finalAvatar}`;
+            if (!finalAvatar.startsWith('http') && !finalAvatar.startsWith('file://')) {
+              const cleanedPath = finalAvatar.replace(/^\/?storage\//, '');
+              finalAvatar = `${API_URL.replace('/api', '')}/storage/${cleanedPath}`;
             }
+            console.log('[DEBUG] EditProfile Load Avatar:', finalAvatar);
             setAvatarUri(finalAvatar);
           }
         }
@@ -61,9 +63,11 @@ export default function EditProfile() {
         const apiAvatar = json.photo || json.avatar || json.avatar_url || json.photoUrl;
         if (apiAvatar) {
           let finalApiAvatar = String(apiAvatar);
-          if (!finalApiAvatar.startsWith('http')) {
+          if (!finalApiAvatar.startsWith('http') && !finalApiAvatar.startsWith('file://')) {
+            const cleanedPath = finalApiAvatar.replace(/^\/?storage\//, '');
             finalApiAvatar = `${API_URL.replace('/api', '')}/storage/${finalApiAvatar}`;
           }
+          console.log('[DEBUG] EditProfile API Avatar:', finalApiAvatar);
           setAvatarUri(finalApiAvatar);
         }
 
@@ -127,12 +131,14 @@ export default function EditProfile() {
       }
 
       // Mettre à jour le user local avec les données serveur (qui incluent le nouvel URL de la photo)
-      const updatedPhoto = json.photo;
-      if (updatedPhoto) {
+      let updatedPhoto = json.photo || json.user?.photo;
+      if (updatedPhoto && API_URL) {
         let finalUpdatedPhoto = updatedPhoto;
         if (!finalUpdatedPhoto.startsWith('http')) {
-          finalUpdatedPhoto = `${API_URL.replace('/api', '')}/storage/${finalUpdatedPhoto}`;
+          const cleanedPath = String(finalUpdatedPhoto).replace(/^\/?storage\//, '');
+          finalUpdatedPhoto = `${API_URL.replace('/api', '')}/storage/${cleanedPath}`;
         }
+        console.log('[DEBUG] EditProfile Updated Photo:', finalUpdatedPhoto);
         setAvatarUri(finalUpdatedPhoto);
       }
 

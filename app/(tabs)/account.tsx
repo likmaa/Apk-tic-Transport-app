@@ -40,14 +40,25 @@ export default function AccountTab() {
 
         if (res.ok) {
           const data = await res.json();
+          let photoUrl = data.photo;
+          if (photoUrl && !photoUrl.startsWith('http') && !photoUrl.startsWith('file://')) {
+            const cleanedPath = photoUrl.replace(/^\/?storage\//, '');
+            photoUrl = `${API_URL.replace('/api', '')}/storage/${cleanedPath}`;
+          }
+          console.log('[DEBUG] Passenger Account Photo URL:', photoUrl);
           setUser({
             name: data.name,
             phone: data.phone,
             email: data.email,
-            photo: data.photo && !data.photo.startsWith('http')
-              ? `${API_URL.replace('/api', '')}/storage/${data.photo}`
-              : data.photo
+            photo: photoUrl
           });
+
+          // Mettre à jour le cache local
+          const storedUser = await AsyncStorage.getItem('authUser');
+          if (storedUser) {
+            const userObj = JSON.parse(storedUser);
+            await AsyncStorage.setItem('authUser', JSON.stringify({ ...userObj, photo: photoUrl, avatar: photoUrl }));
+          }
         }
       } catch (e) {
         console.log('Error fetching user info', e);
