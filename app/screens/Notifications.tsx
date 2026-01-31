@@ -1,7 +1,8 @@
 // screens/Notifications.tsx
-import React, { useMemo, useState } from 'react';
-import { SafeAreaView, StyleSheet, Text, View, SectionList, TouchableOpacity } from 'react-native';
+import React, { useMemo, useState, useEffect } from 'react';
+import { SafeAreaView, StyleSheet, Text, View, SectionList, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { useNavigation } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '../theme';
 import { Fonts } from '../font';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -18,12 +19,6 @@ type NotificationItem = {
 };
 
 // Données mock avec des types différents
-const initialNotifications: NotificationItem[] = [
-  { id: '1', type: 'ride', title: 'Chauffeur en route', message: 'Votre chauffeur arrive dans 5 minutes.', date: 'Aujourd\'hui, 09:45', read: false },
-  { id: '2', type: 'promo', title: '20% de réduction !', message: 'Utilisez le code PROMO20 pour votre prochaine course.', date: 'Aujourd\'hui, 09:15', read: false },
-  { id: '3', type: 'ride', title: 'Reçu de course', message: 'Votre reçu pour la course vers le centre-ville est disponible.', date: 'Hier, 18:22', read: true },
-  { id: '4', type: 'system', title: 'Mise à jour des conditions', message: 'Nos conditions d\'utilisation ont été mises à jour.', date: '20 Sep, 10:00', read: true },
-];
 
 // Helper pour regrouper les notifications par date
 const groupNotificationsByDate = (notifications: NotificationItem[]) => {
@@ -57,17 +52,94 @@ const getNotificationStyle = (type: NotificationType) => {
 
 export default function NotificationsScreen() {
   const navigation = useNavigation();
-  const [items, setItems] = useState<NotificationItem[]>(initialNotifications);
+  const [items, setItems] = useState<NotificationItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const API_URL = process.env.EXPO_PUBLIC_API_URL;
+
+  const fetchNotifications = async () => {
+    try {
+      setLoading(true);
+      const token = await AsyncStorage.getItem('authToken');
+      if (!token || !API_URL) return;
+
+      const response = await fetch(`${API_URL}/passenger/notifications`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        // Assuming data is an array of notifications from backend
+        // Transform backend data to NotificationItem if needed
+        const mappedData: NotificationItem[] = (data || []).map((n: any) => ({
+          id: String(n.id),
+          type: n.type || 'system',
+          title: n.title,
+          message: n.message,
+          date: n.created_at ? new Date(n.created_at).toLocaleDateString('fr-FR', {
+            day: 'numeric',
+            month: 'short',
+            hour: '2-digit',
+            minute: '2-digit'
+          }) : '',
+          read: !!n.read_at
+        }));
+        setItems(mappedData);
+      }
+    } catch (error) {
+      console.error('Error fetching notifications:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchNotifications();
+  }, []);
 
   const unreadCount = useMemo(() => items.filter(n => !n.read).length, [items]);
   const groupedData = useMemo(() => groupNotificationsByDate(items), [items]);
 
-  const toggleRead = (id: string) => {
-    setItems(prev => prev.map(n => (n.id === id ? { ...n, read: !n.read } : n)));
+  const toggleRead = async (id: string) => {
+    // Optimistic UI update
+    setItems(prev => prev.map(n => (n.id === id ? { ...n, read: true } : n)));
+
+    try {
+      const token = await AsyncStorage.getItem('authToken');
+      if (!token || !API_URL) return;
+
+      await fetch(`${API_URL}/passenger/notifications/${id}/read`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json'
+        }
+      });
+    } catch (e) {
+      console.warn("Error marking notification as read:", e);
+    }
   };
 
-  const markAllRead = () => {
+  const markAllRead = async () => {
+    // Optimistic UI update
     setItems(prev => prev.map(n => ({ ...n, read: true })));
+
+    try {
+      const token = await AsyncStorage.getItem('authToken');
+      if (!token || !API_URL) return;
+
+      await fetch(`${API_URL}/passenger/notifications/read-all`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json'
+        }
+      });
+    } catch (e) {
+      console.warn("Error marking all notifications as read:", e);
+    }
   };
 
   return (
@@ -81,7 +153,11 @@ export default function NotificationsScreen() {
         )}
       </View>
 
-      {items.length === 0 ? (
+      {loading ? (
+        <View style={styles.centerContainer}>
+          <ActivityIndicator size="large" color={Colors.primary} />
+        </View>
+      ) : items.length === 0 ? (
         <View style={styles.emptyContainer}>
           <View style={styles.emptyIcon}>
             <Ionicons name="notifications-off-outline" size={64} color={Colors.mediumGray} />
@@ -130,13 +206,18 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.background,
   },
+  centerContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 10,
     paddingVertical: 10,
-   
+
     borderBottomWidth: 1,
     borderBottomColor: Colors.lightGray,
   },

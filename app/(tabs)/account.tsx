@@ -44,7 +44,9 @@ export default function AccountTab() {
             name: data.name,
             phone: data.phone,
             email: data.email,
-            photo: data.photo
+            photo: data.photo && !data.photo.startsWith('http')
+              ? `${API_URL.replace('/api', '')}/storage/${data.photo}`
+              : data.photo
           });
         }
       } catch (e) {
@@ -91,7 +93,11 @@ export default function AccountTab() {
         <View style={styles.header}>
           <View style={styles.avatarContainer}>
             {user?.photo ? (
-              <Image source={{ uri: user.photo }} style={styles.avatarImage} />
+              <Image
+                source={{ uri: user.photo }}
+                style={[styles.avatarImage, { backgroundColor: '#E2E8F0' }]}
+                resizeMode="cover"
+              />
             ) : (
               <View style={styles.avatarPlaceholder}>
                 <Text style={styles.avatarInitial}>{user?.name?.charAt(0) || 'U'}</Text>

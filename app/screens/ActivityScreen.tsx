@@ -51,13 +51,6 @@ type ActivityItem = {
     price: string;
 };
 
-// Données de test (vous les chargerez depuis AsyncStorage)
-const sampleData: ActivityItem[] = [
-    { id: "1", serviceType: "deplacement", status: "ongoing", date: "28 Jun", time: "10:05", from: "Parc Pendrikan Kidul", to: "Villas Semarang Indah", price: "12 500 FCFA" },
-    { id: "2", serviceType: "course", status: "past", date: "27 Jun", time: "15:30", from: "Super U", to: "Domicile", price: "3 500 FCFA" },
-    { id: "3", serviceType: "livraison", status: "upcoming", date: "30 Jun", time: "09:00", from: "Bureau", to: "Client X", price: "2 000 FCFA" },
-    { id: "4", serviceType: "deplacement", status: "cancelled", date: "25 Jun", time: "11:00", from: "Aéroport", to: "Hôtel du Lac", price: "8 000 FCFA" },
-];
 
 // ----------------------------------------------------------------
 // 2. COMPOSANTS UI (pour un code plus propre)

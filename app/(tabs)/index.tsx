@@ -24,7 +24,7 @@ export default function HomeTab() {
   const [userName, setUserName] = useState<string>('');
   const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
-  // 1. Session Protection & User Data
+  // 1. Session Protection, User Data & Wallet Balance
   useEffect(() => {
     const checkRole = async () => {
       try {
@@ -38,28 +38,32 @@ export default function HomeTab() {
         const token = await AsyncStorage.getItem("authToken");
         if (!token) return;
 
-        const res = await fetch(`${API_URL}/auth/me`, {
-          headers: {
-            Accept: "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-        });
+        // Fetch user profile and wallet balance
+        const [userRes, walletRes] = await Promise.all([
+          fetch(`${API_URL}/auth/me`, {
+            headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+          }),
+          fetch(`${API_URL}/passenger/wallet`, {
+            headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+          })
+        ]);
 
-        if (!res.ok) return;
-        const user = await res.json();
-        setUserName(user.name);
+        if (userRes.ok) {
+          const user = await userRes.json();
+          setUserName(user.name);
+          if (user?.role === "driver") {
+            await AsyncStorage.multiRemove(["authToken", "authUser"]);
+            Alert.alert("Compte chauffeur", "Veuillez vous connecter avec l'application chauffeur.");
+            router.replace("/auth/LoginPhone");
+          }
+        }
 
-        if (user?.role === "driver") {
-          await AsyncStorage.removeItem("authToken");
-          await AsyncStorage.removeItem("authUser");
-          Alert.alert(
-            "Compte chauffeur",
-            "Ce compte est un compte chauffeur. Veuillez vous connecter avec l'application chauffeur."
-          );
-          router.replace("/auth/LoginPhone");
+        if (walletRes.ok) {
+          const wallet = await walletRes.json();
+          setWalletBalance(Number(wallet.balance) || 0);
         }
       } catch (err) {
-        console.warn("Role check error:", err);
+        console.warn("Home screen init error:", err);
       }
     };
     checkRole();

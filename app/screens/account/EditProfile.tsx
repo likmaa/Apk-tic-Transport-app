@@ -25,7 +25,13 @@ export default function EditProfile() {
           if (user.email) setEmail(user.email);
           if (user.phone) setPhone(user.phone);
           const storedAvatar = user.photo || user.avatar || user.avatar_url || user.photoUrl;
-          if (storedAvatar) setAvatarUri(String(storedAvatar));
+          if (storedAvatar) {
+            let finalAvatar = String(storedAvatar);
+            if (!finalAvatar.startsWith('http') && !finalAvatar.startsWith('file://') && API_URL) {
+              finalAvatar = `${API_URL.replace('/api', '')}/storage/${finalAvatar}`;
+            }
+            setAvatarUri(finalAvatar);
+          }
         }
 
         if (!API_URL) {
@@ -53,7 +59,13 @@ export default function EditProfile() {
         if (json.email) setEmail(json.email);
         if (json.phone) setPhone(json.phone);
         const apiAvatar = json.photo || json.avatar || json.avatar_url || json.photoUrl;
-        if (apiAvatar) setAvatarUri(String(apiAvatar));
+        if (apiAvatar) {
+          let finalApiAvatar = String(apiAvatar);
+          if (!finalApiAvatar.startsWith('http')) {
+            finalApiAvatar = `${API_URL.replace('/api', '')}/storage/${finalApiAvatar}`;
+          }
+          setAvatarUri(finalApiAvatar);
+        }
 
         await AsyncStorage.setItem('authUser', JSON.stringify({ ...json, avatar: apiAvatar ?? avatarUri, photo: apiAvatar ?? avatarUri }));
       } catch (e) {
@@ -117,7 +129,11 @@ export default function EditProfile() {
       // Mettre à jour le user local avec les données serveur (qui incluent le nouvel URL de la photo)
       const updatedPhoto = json.photo;
       if (updatedPhoto) {
-        setAvatarUri(updatedPhoto);
+        let finalUpdatedPhoto = updatedPhoto;
+        if (!finalUpdatedPhoto.startsWith('http')) {
+          finalUpdatedPhoto = `${API_URL.replace('/api', '')}/storage/${finalUpdatedPhoto}`;
+        }
+        setAvatarUri(finalUpdatedPhoto);
       }
 
       await AsyncStorage.setItem('authUser', JSON.stringify({ ...json }));
@@ -169,7 +185,8 @@ export default function EditProfile() {
         <View style={styles.avatarContainer}>
           <Image
             source={avatarUri ? { uri: avatarUri } : require('../../../assets/images/LOGO_OR.png')}
-            style={styles.avatar}
+            style={[styles.avatar, { backgroundColor: '#E2E8F0' }]}
+            resizeMode="cover"
           />
           <TouchableOpacity style={styles.changePhotoBtn} onPress={handleChangePhoto}>
             <Text style={styles.changePhotoText}>Changer la photo</Text>
