@@ -164,13 +164,24 @@ export default function RideReceipt() {
       });
 
       if (res.ok) {
-        Alert.alert('Merci !', 'Votre note et votre pourboire ont été enregistrés.');
+        Alert.alert('Merci !', 'Votre note a été enregistrée.', [
+          { text: 'OK', onPress: () => router.replace('/') }
+        ]);
+      } else {
+        const errorData = await res.json().catch(() => ({}));
+        // If rating already exists, still allow user to continue
+        if (res.status === 409) {
+          router.replace('/');
+        } else {
+          console.warn('Rating error:', errorData);
+          Alert.alert('Erreur', 'Impossible d\'enregistrer votre note. Veuillez réessayer.');
+        }
       }
     } catch (e) {
       console.warn('Rating error:', e);
+      Alert.alert('Erreur', 'Une erreur est survenue. Veuillez réessayer.');
     } finally {
       setLoading(false);
-      router.replace('/');
     }
   };
 
