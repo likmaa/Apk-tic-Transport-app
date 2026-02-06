@@ -27,7 +27,7 @@
       "bundleIdentifier": "com.ticmiton.passenger"
     },
     "android": {
-      "versionCode": 3,
+      "versionCode": 4,
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/app-icon.png"

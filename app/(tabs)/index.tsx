@@ -16,12 +16,28 @@ import DeliverySection from '../components/DeliverySection';
 
 type ServiceType = 'Course' | 'Déplacement' | 'Livraison';
 
+interface ActiveRide {
+  id: number;
+  status: string;
+  vehicle_type: string;
+  driver?: any;
+  fare_amount?: number;
+  distance_m?: number;
+  payment_method?: string;
+  breakdown?: any;
+  pickup_lat?: number;
+  pickup_lng?: number;
+  dropoff_lat?: number;
+  dropoff_lng?: number;
+}
+
 export default function HomeTab() {
   const navigation = useNavigation();
   const router = useRouter();
   const [selectedService, setSelectedService] = useState<ServiceType>('Course');
   const [walletBalance, setWalletBalance] = useState<number>(0);
   const [userName, setUserName] = useState<string>('');
+  const [activeRide, setActiveRide] = useState<ActiveRide | null>(null);
   const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
   // 1. Session Protection, User Data & Wallet Balance
@@ -69,7 +85,7 @@ export default function HomeTab() {
     checkRole();
   }, [API_URL, router]);
 
-  // 2. Persistent Ride Recovery
+  // 2. Check for Active Ride (show banner instead of auto-redirect)
   useEffect(() => {
     const checkActiveRide = async () => {
       try {
@@ -84,51 +100,78 @@ export default function HomeTab() {
           },
         });
 
-        if (!res.ok) return;
+        if (!res.ok) {
+          setActiveRide(null);
+          return;
+        }
         const ride = await res.json();
 
         if (ride && ride.id) {
-          if (ride.status === 'requested') {
-            router.replace({
-              pathname: '/screens/ride/SearchingDriver',
-              params: {
-                rideId: String(ride.id),
-                vehicleName: ride.vehicle_type === 'vip' ? 'VIP' : 'Standard'
-              }
-            });
-          } else if (['accepted', 'arrived', 'started', 'ongoing'].includes(ride.status)) {
-            router.replace({
-              pathname: '/screens/ride/DriverTracking',
-              params: {
-                rideId: String(ride.id),
-                vehicleName: ride.vehicle_type === 'vip' ? 'VIP' : 'Standard',
-                driver: JSON.stringify(ride.driver)
-              }
-            });
-          } else if (ride.status === 'completed') {
-            router.replace({
-              pathname: '/screens/ride/RideReceipt',
-              params: {
-                rideId: String(ride.id),
-                amount: ride.fare_amount || 0,
-                distanceKm: (ride.distance_m || 0) / 1000,
-                vehicleName: ride.vehicle_type === 'vip' ? 'VIP' : 'Standard',
-                paymentMethod: ride.payment_method || 'cash',
-                breakdown: ride.breakdown ? JSON.stringify(ride.breakdown) : undefined,
-                pickupLat: ride.pickup_lat,
-                pickupLng: ride.pickup_lng,
-                dropoffLat: ride.dropoff_lat,
-                dropoffLng: ride.dropoff_lng
-              }
-            });
-          }
+          setActiveRide(ride);
+        } else {
+          setActiveRide(null);
         }
       } catch (err) {
         console.warn("Active ride check error:", err);
+        setActiveRide(null);
       }
     };
     checkActiveRide();
-  }, [API_URL, router]);
+  }, [API_URL]);
+
+  // Navigate to active ride screen
+  const handleReturnToRide = () => {
+    if (!activeRide) return;
+
+    if (activeRide.status === 'requested') {
+      router.push({
+        pathname: '/screens/ride/SearchingDriver',
+        params: {
+          rideId: String(activeRide.id),
+          vehicleName: activeRide.vehicle_type === 'vip' ? 'VIP' : 'Standard'
+        }
+      });
+    } else if (['accepted', 'arrived', 'started', 'ongoing'].includes(activeRide.status)) {
+      router.push({
+        pathname: '/screens/ride/DriverTracking',
+        params: {
+          rideId: String(activeRide.id),
+          vehicleName: activeRide.vehicle_type === 'vip' ? 'VIP' : 'Standard',
+          driver: JSON.stringify(activeRide.driver)
+        }
+      });
+    } else if (activeRide.status === 'completed') {
+      router.push({
+        pathname: '/screens/ride/RideReceipt',
+        params: {
+          rideId: String(activeRide.id),
+          amount: activeRide.fare_amount || 0,
+          distanceKm: (activeRide.distance_m || 0) / 1000,
+          vehicleName: activeRide.vehicle_type === 'vip' ? 'VIP' : 'Standard',
+          paymentMethod: activeRide.payment_method || 'cash',
+          breakdown: activeRide.breakdown ? JSON.stringify(activeRide.breakdown) : undefined,
+          pickupLat: activeRide.pickup_lat,
+          pickupLng: activeRide.pickup_lng,
+          dropoffLat: activeRide.dropoff_lat,
+          dropoffLng: activeRide.dropoff_lng
+        }
+      });
+    }
+  };
+
+  // Get status label for active ride banner
+  const getActiveRideLabel = () => {
+    if (!activeRide) return '';
+    switch (activeRide.status) {
+      case 'requested': return 'Recherche de chauffeur en cours...';
+      case 'accepted': return 'Chauffeur en route vers vous';
+      case 'arrived': return 'Votre chauffeur est arrivé';
+      case 'started':
+      case 'ongoing': return 'Course en cours';
+      case 'completed': return 'Évaluer votre course';
+      default: return 'Course active';
+    }
+  };
 
   const renderActiveSection = () => {
     switch (selectedService) {
@@ -203,6 +246,31 @@ export default function HomeTab() {
 
         <View style={{ height: 100 }} />
       </ScrollView>
+
+      {/* ACTIVE RIDE BANNER */}
+      {activeRide && (
+        <TouchableOpacity
+          style={styles.activeRideBanner}
+          onPress={handleReturnToRide}
+          activeOpacity={0.9}
+        >
+          <LinearGradient
+            colors={['#FF6B35', '#F7931E']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.activeRideBannerGradient}
+          >
+            <View style={styles.activeRideBannerContent}>
+              <View style={styles.activeRidePulse} />
+              <View style={styles.activeRideInfo}>
+                <Text style={styles.activeRideLabel}>{getActiveRideLabel()}</Text>
+                <Text style={styles.activeRideAction}>Appuyez pour retourner à votre course</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={24} color="#fff" />
+            </View>
+          </LinearGradient>
+        </TouchableOpacity>
+      )}
 
     </SafeAreaView>
   );
@@ -308,5 +376,48 @@ const styles = StyleSheet.create({
   },
   sectionContainer: {
     marginTop: 0,
+  },
+
+  // Active Ride Banner Styles
+  activeRideBanner: {
+    position: 'absolute',
+    bottom: 90,
+    left: 20,
+    right: 20,
+    borderRadius: 16,
+    shadowColor: '#FF6B35',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  activeRideBannerGradient: {
+    borderRadius: 16,
+    padding: 16,
+  },
+  activeRideBannerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  activeRidePulse: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#fff',
+    marginRight: 12,
+  },
+  activeRideInfo: {
+    flex: 1,
+  },
+  activeRideLabel: {
+    fontFamily: Fonts.titilliumWebBold,
+    color: '#fff',
+    fontSize: 15,
+  },
+  activeRideAction: {
+    fontFamily: Fonts.titilliumWeb,
+    color: 'rgba(255,255,255,0.85)',
+    fontSize: 12,
+    marginTop: 2,
   },
 });
