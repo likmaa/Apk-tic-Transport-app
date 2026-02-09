@@ -125,7 +125,7 @@ const SearchTimer = ({ onTimeout }: { onTimeout: () => void }) => {
     const interval = setInterval(() => {
       setSeconds(s => {
         const next = s + 1;
-        if (next === 300) onTimeout(); // 5 minutes
+        if (next === 600) onTimeout(); // 10 minutes
         return next;
       });
     }, 1000);
@@ -449,7 +449,10 @@ export default function SearchingDriver() {
           <View style={styles.supportButtons}>
             <TouchableOpacity
               style={[styles.supportButton, { backgroundColor: '#25D366' }]}
-              onPress={() => Linking.openURL('https://wa.me/2290157792662')}
+              onPress={() => {
+                const message = `Bonjour Support TIC,\n\nJe ne trouve pas de chauffeur pour ma course #${rideId}.\n\nDépart: ${origin?.address}\nDestination: ${destination?.address}\n\nPouvez-vous m'aider ?`;
+                Linking.openURL(`https://wa.me/22957792662?text=${encodeURIComponent(message)}`);
+              }}
             >
               <Ionicons name="logo-whatsapp" size={24} color="#fff" />
               <Text style={styles.supportButtonText}>WhatsApp Support</Text>
@@ -457,7 +460,7 @@ export default function SearchingDriver() {
 
             <TouchableOpacity
               style={[styles.supportButton, { backgroundColor: Colors.secondary }]}
-              onPress={() => Linking.openURL('tel:0157792662')}
+              onPress={() => Linking.openURL('tel:+2290157792662')}
             >
               <Ionicons name="call" size={24} color="#fff" />
               <Text style={styles.supportButtonText}>Appeler Support</Text>

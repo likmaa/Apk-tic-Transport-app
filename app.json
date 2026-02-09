@@ -42,7 +42,7 @@
       ],
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.ticmiton.passenger"
+      "package": "com.apktic.passenger"
     },
     "web": {
       "output": "static",
