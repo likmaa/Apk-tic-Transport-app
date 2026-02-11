@@ -15,6 +15,23 @@ export default function EditProfile() {
   const [loading, setLoading] = useState(false);
   const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
+  const getImageUrl = (path: string | null) => {
+    if (!path) return null;
+    let url = path;
+    if (!path.startsWith('http') && !path.startsWith('file://')) {
+      const cleanedPath = path.replace(/^\/?storage\//, '');
+      const baseUrl = API_URL ? API_URL.replace('/api', '') : '';
+      url = `${baseUrl}/storage/${cleanedPath}`;
+    }
+
+    // Force HTTPS if the current page/env is secure (or if it starts with http:)
+    // In mobile, we might want to force it if the API_URL is https
+    if (API_URL?.startsWith('https:') && url.startsWith('http:')) {
+      url = url.replace('http:', 'https:');
+    }
+    return url;
+  };
+
   useEffect(() => {
     const loadProfile = async () => {
       try {
@@ -24,15 +41,9 @@ export default function EditProfile() {
           if (user.name) setName(String(user.name));
           if (user.email) setEmail(user.email);
           if (user.phone) setPhone(user.phone);
-          const storedAvatar = user.photo || user.avatar || user.avatar_url || user.photoUrl;
-          if (storedAvatar && API_URL) {
-            let finalAvatar = String(storedAvatar);
-            if (!finalAvatar.startsWith('http') && !finalAvatar.startsWith('file://')) {
-              const cleanedPath = finalAvatar.replace(/^\/?storage\//, '');
-              finalAvatar = `${API_URL.replace('/api', '')}/storage/${cleanedPath}`;
-            }
-            console.log('[DEBUG] EditProfile Load Avatar:', finalAvatar);
-            setAvatarUri(finalAvatar);
+          const storedAvatar = user.photo || user.avatar;
+          if (storedAvatar) {
+            setAvatarUri(getImageUrl(storedAvatar));
           }
         }
 
@@ -60,18 +71,12 @@ export default function EditProfile() {
         if (json.name) setName(String(json.name));
         if (json.email) setEmail(json.email);
         if (json.phone) setPhone(json.phone);
-        const apiAvatar = json.photo || json.avatar || json.avatar_url || json.photoUrl;
+        const apiAvatar = json.photo;
         if (apiAvatar) {
-          let finalApiAvatar = String(apiAvatar);
-          if (!finalApiAvatar.startsWith('http') && !finalApiAvatar.startsWith('file://')) {
-            const cleanedPath = finalApiAvatar.replace(/^\/?storage\//, '');
-            finalApiAvatar = `${API_URL.replace('/api', '')}/storage/${finalApiAvatar}`;
-          }
-          console.log('[DEBUG] EditProfile API Avatar:', finalApiAvatar);
-          setAvatarUri(finalApiAvatar);
+          setAvatarUri(getImageUrl(apiAvatar));
         }
 
-        await AsyncStorage.setItem('authUser', JSON.stringify({ ...json, avatar: apiAvatar ?? avatarUri, photo: apiAvatar ?? avatarUri }));
+        await AsyncStorage.setItem('authUser', JSON.stringify({ ...json }));
       } catch (e) {
         console.warn('Erreur chargement profil', e);
       }
@@ -131,15 +136,9 @@ export default function EditProfile() {
       }
 
       // Mettre à jour le user local avec les données serveur (qui incluent le nouvel URL de la photo)
-      let updatedPhoto = json.photo || json.user?.photo;
-      if (updatedPhoto && API_URL) {
-        let finalUpdatedPhoto = updatedPhoto;
-        if (!finalUpdatedPhoto.startsWith('http')) {
-          const cleanedPath = String(finalUpdatedPhoto).replace(/^\/?storage\//, '');
-          finalUpdatedPhoto = `${API_URL.replace('/api', '')}/storage/${cleanedPath}`;
-        }
-        console.log('[DEBUG] EditProfile Updated Photo:', finalUpdatedPhoto);
-        setAvatarUri(finalUpdatedPhoto);
+      const updatedPhoto = json.photo;
+      if (updatedPhoto) {
+        setAvatarUri(getImageUrl(updatedPhoto));
       }
 
       await AsyncStorage.setItem('authUser', JSON.stringify({ ...json }));
@@ -185,6 +184,25 @@ export default function EditProfile() {
     }
   };
 
+  const formatPhoneNumber = (text: string) => {
+    const cleaned = text.replace(/\D/g, "");
+    let formatted = "";
+    for (let i = 0; i < cleaned.length; i++) {
+      if (i > 0 && i % 2 === 0) {
+        formatted += " ";
+      }
+      formatted += cleaned[i];
+    }
+    return formatted;
+  };
+
+  const handlePhoneChange = (text: string) => {
+    const formatted = formatPhoneNumber(text);
+    if (formatted.length <= 14) { // 10 digits + 4 spaces
+      setPhone(formatted);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.content}>
@@ -214,7 +232,14 @@ export default function EditProfile() {
         </View>
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Téléphone</Text>
-          <TextInput value={phone} onChangeText={setPhone} style={styles.input} placeholder="Téléphone" keyboardType="phone-pad" />
+          <TextInput
+            value={phone}
+            onChangeText={handlePhoneChange}
+            style={styles.input}
+            placeholder="97 23 45 67"
+            keyboardType="phone-pad"
+            maxLength={14}
+          />
         </View>
 
         <TouchableOpacity style={styles.saveBtn} onPress={handleSave} disabled={loading}>
