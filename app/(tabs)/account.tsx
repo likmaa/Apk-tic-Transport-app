@@ -15,6 +15,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import { Colors } from '../theme';
 import { Fonts } from '../font';
+import { getImageUrl } from '../utils/images';
 
 interface UserInfo {
   name: string;
@@ -40,17 +41,13 @@ export default function AccountTab() {
 
         if (res.ok) {
           const data = await res.json();
-          let photoUrl = data.photo;
-          if (photoUrl && !photoUrl.startsWith('http') && !photoUrl.startsWith('file://')) {
-            const cleanedPath = photoUrl.replace(/^\/?storage\//, '');
-            photoUrl = `${API_URL.replace('/api', '')}/storage/${cleanedPath}`;
-          }
+          let photoUrl = getImageUrl(data.photo);
           console.log('[DEBUG] Passenger Account Photo URL:', photoUrl);
           setUser({
             name: data.name,
             phone: data.phone,
             email: data.email,
-            photo: photoUrl
+            photo: photoUrl || undefined
           });
 
           // Mettre à jour le cache local
@@ -105,7 +102,7 @@ export default function AccountTab() {
           <View style={styles.avatarContainer}>
             {user?.photo ? (
               <Image
-                source={{ uri: user.photo }}
+                source={{ uri: getImageUrl(user.photo) || '' }}
                 style={[styles.avatarImage, { backgroundColor: '#E2E8F0' }]}
                 resizeMode="cover"
               />

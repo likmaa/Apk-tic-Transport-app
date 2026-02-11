@@ -7,6 +7,7 @@ import { EMBARKATION_POINTS } from '../data/embarkationPoints';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Colors, Fonts } from '../theme';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getImageUrl } from '../utils/images';
 
 import { useAuth } from '../providers/AuthProvider';
 
@@ -271,7 +272,7 @@ export default function CourseSection({ activeService }: { activeService?: strin
                   activeOpacity={0.95}
                   onPress={() => handlePromoPress(promo)}
                 >
-                  <Image source={{ uri: promo.image_url }} style={styles.adImage} resizeMode="cover" />
+                  <Image source={{ uri: getImageUrl(promo.image_url) || '' }} style={styles.adImage} resizeMode="cover" />
                   <LinearGradient
                     colors={['transparent', 'rgba(0,0,0,0.7)']}
                     style={styles.adGradient}

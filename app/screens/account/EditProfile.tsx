@@ -5,6 +5,7 @@ import { useRouter } from 'expo-router';
 import { Colors } from '../../theme';
 import { Fonts } from '../../font';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getImageUrl } from '../../utils/images';
 
 export default function EditProfile() {
   const router = useRouter();
@@ -15,22 +16,6 @@ export default function EditProfile() {
   const [loading, setLoading] = useState(false);
   const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
-  const getImageUrl = (path: string | null) => {
-    if (!path) return null;
-    let url = path;
-    if (!path.startsWith('http') && !path.startsWith('file://')) {
-      const cleanedPath = path.replace(/^\/?storage\//, '');
-      const baseUrl = API_URL ? API_URL.replace('/api', '') : '';
-      url = `${baseUrl}/storage/${cleanedPath}`;
-    }
-
-    // Force HTTPS if the current page/env is secure (or if it starts with http:)
-    // In mobile, we might want to force it if the API_URL is https
-    if (API_URL?.startsWith('https:') && url.startsWith('http:')) {
-      url = url.replace('http:', 'https:');
-    }
-    return url;
-  };
 
   useEffect(() => {
     const loadProfile = async () => {
@@ -208,7 +193,7 @@ export default function EditProfile() {
       <View style={styles.content}>
         <View style={styles.avatarContainer}>
           <Image
-            source={avatarUri ? { uri: avatarUri } : require('../../../assets/images/LOGO_OR.png')}
+            source={avatarUri ? { uri: getImageUrl(avatarUri) || '' } : require('../../../assets/images/LOGO_OR.png')}
             style={[styles.avatar, { backgroundColor: '#E2E8F0' }]}
             resizeMode="cover"
           />

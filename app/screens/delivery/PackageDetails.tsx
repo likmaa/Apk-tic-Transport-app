@@ -20,7 +20,27 @@ export default function PackageDetails() {
   const [weightKg, setWeightKg] = useState(packageDetails?.weightKg || '');
   const [fragile, setFragile] = useState(!!packageDetails?.fragile);
 
-  const isValid = recipientName.trim().length >= 2 && recipientPhone.trim().length >= 8;
+  const formatPhoneNumber = (text: string) => {
+    const cleaned = text.replace(/\D/g, "");
+    let formatted = "";
+    for (let i = 0; i < cleaned.length; i++) {
+      if (i > 0 && i % 2 === 0) {
+        formatted += " ";
+      }
+      formatted += cleaned[i];
+    }
+    return formatted;
+  };
+
+  const handlePhoneChange = (text: string) => {
+    const formatted = formatPhoneNumber(text);
+    if (formatted.length <= 14) { // 10 digits + 4 spaces
+      setRecipientPhone(formatted);
+    }
+  };
+
+  const recipientPhoneDigits = recipientPhone.replace(/\s/g, "");
+  const isValid = recipientName.trim().length >= 2 && [8, 10].includes(recipientPhoneDigits.length);
   const addressesValid = !!origin && !!destination;
 
   function onContinue() {
@@ -40,8 +60,8 @@ export default function PackageDetails() {
         <View style={{ width: 44 }} />
       </View> */}
 
-      <KeyboardAvoidingView 
-        style={{ flex: 1 }} 
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : "height"}
       >
         <ScrollView contentContainerStyle={styles.scrollContent}>
@@ -88,11 +108,12 @@ export default function PackageDetails() {
               <MaterialCommunityIcons name="phone-outline" size={24} color={Colors.gray} style={styles.inputIcon} />
               <TextInput
                 value={recipientPhone}
-                onChangeText={setRecipientPhone}
+                onChangeText={handlePhoneChange}
                 keyboardType="phone-pad"
-                placeholder="Téléphone du destinataire"
+                placeholder="97 23 45 67"
                 placeholderTextColor={Colors.gray}
                 style={styles.input}
+                maxLength={14}
               />
             </View>
           </View>
@@ -126,7 +147,7 @@ export default function PackageDetails() {
 
           {/* Section Options */}
           <Text style={styles.sectionTitle}>Options</Text>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={[styles.card, styles.optionCard, fragile && styles.cardActive]}
             onPress={() => setFragile(f => !f)}
             activeOpacity={0.8}
@@ -144,9 +165,9 @@ export default function PackageDetails() {
 
       {/* Footer avec le bouton de confirmation */}
       <View style={styles.footer}>
-        <TouchableOpacity 
-          style={[styles.confirmButton, (!isValid || !addressesValid) && styles.buttonDisabled]} 
-          disabled={!isValid || !addressesValid} 
+        <TouchableOpacity
+          style={[styles.confirmButton, (!isValid || !addressesValid) && styles.buttonDisabled]}
+          disabled={!isValid || !addressesValid}
           onPress={onContinue}
         >
           <Text style={styles.confirmButtonText}>Continuer</Text>

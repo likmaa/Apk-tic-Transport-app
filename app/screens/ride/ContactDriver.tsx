@@ -7,10 +7,11 @@ import * as Linking from 'expo-linking';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Colors } from '../../theme';
 import { Fonts } from '../../font';
+import { getImageUrl } from '../../utils/images';
 
 type RootParams = {
-  'screens/ride/ContactDriver': { 
-    driverName?: string; 
+  'screens/ride/ContactDriver': {
+    driverName?: string;
     vehicleName?: string;
     driverImage?: string; // URL de l'image du chauffeur
     vehiclePlate?: string; // Plaque d'immatriculation
@@ -20,7 +21,7 @@ type RootParams = {
 export default function ContactDriver() {
   const navigation = useNavigation();
   const route = useRoute<RouteProp<RootParams, 'screens/ride/ContactDriver'>>();
-  
+
   // Utilisation de valeurs par défaut plus réalistes
   const driverName = route.params?.driverName || 'Firmin T.';
   const vehicleName = route.params?.vehicleName || 'Toyota Yaris';
@@ -56,9 +57,9 @@ export default function ContactDriver() {
 
           {/* Carte de profil du chauffeur */}
           <View style={styles.driverCard}>
-            <Image 
-              source={driverImage ? { uri: driverImage } : require('../../../assets/images/LOGO_OR.png')} // Image par défaut
-              style={styles.avatar} 
+            <Image
+              source={driverImage ? { uri: getImageUrl(driverImage) || '' } : require('../../../assets/images/LOGO_OR.png')} // Image par défaut
+              style={styles.avatar}
             />
             <View style={styles.driverInfo}>
               <Text style={styles.driverName}>{driverName}</Text>
@@ -88,7 +89,7 @@ export default function ContactDriver() {
               </View>
               <Text style={styles.actionLabel}>Partager</Text>
             </TouchableOpacity>
-            
+
             <TouchableOpacity style={styles.actionButton} onPress={() => Alert.alert('Problème signalé', 'Notre support a été notifié. Nous vous contacterons si nécessaire.')}>
               <View style={[styles.actionIcon, { backgroundColor: '#FFEBEE' }]}>
                 <MaterialCommunityIcons name="alert-circle" size={28} color="#F44336" />

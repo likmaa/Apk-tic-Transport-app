@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Modal, Text, TextInput, TouchableOpacity, View, FlatList, StyleSheet, Alert, ScrollView } from 'react-native';
+import { Modal, Text, TextInput, TouchableOpacity, View, FlatList, StyleSheet, Alert, ScrollView, ActivityIndicator } from 'react-native';
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useRouter } from 'expo-router';
@@ -25,7 +25,7 @@ export default function DeplacementSection() {
   const [showEmbarkModal, setShowEmbarkModal] = useState(false);
   const [mode, setMode] = useState<'origin' | 'destination'>('origin');
 
-  const { lines, stops } = useLines();
+  const { lines, stops, loading: loadingData } = useLines();
   const [selectedLineId, setSelectedLineId] = useState<number | null>(null);
   const [fromStopId, setFromStopId] = useState<number | null>(null);
   const [toStopId, setToStopId] = useState<number | null>(null);
@@ -50,8 +50,8 @@ export default function DeplacementSection() {
     }
   };
 
-  // Ensure a line is selected by default once lines are loaded
   React.useEffect(() => {
+    console.log('[DEBUG] DeplacementSection - lines:', lines.length, 'stops:', stops.length);
     if (lines.length > 0 && !selectedLineId) {
       setSelectedLineId(lines[0].id);
     }
@@ -258,9 +258,14 @@ export default function DeplacementSection() {
               <Ionicons name="locate" size={20} color={Colors.primary} />
               <Text style={styles.myLocationText}>Ma position actuelle</Text>
             </TouchableOpacity>
+
+            {loadingData && (
+              <ActivityIndicator color={Colors.primary} style={{ marginBottom: 20 }} />
+            )}
             <FlatList
               data={lineStops as any[]}
               keyExtractor={item => String(item.id)}
+              contentContainerStyle={{ paddingBottom: 40 }}
               renderItem={({ item }) => (
                 <TouchableOpacity
                   style={styles.stopItem}
@@ -270,6 +275,13 @@ export default function DeplacementSection() {
                   <Text style={styles.stopName}>{item.name}</Text>
                 </TouchableOpacity>
               )}
+              ListEmptyComponent={
+                <View style={{ padding: 20, alignItems: 'center' }}>
+                  <Text style={{ fontFamily: Fonts.titilliumWeb, color: Colors.gray }}>
+                    {loadingData ? "Chargement des points..." : "Aucun point d'arrêt disponible."}
+                  </Text>
+                </View>
+              }
             />
           </View>
         </View>

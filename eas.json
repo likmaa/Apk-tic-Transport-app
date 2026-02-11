@@ -25,7 +25,8 @@
         "EXPO_PUBLIC_PUSHER_TLS": "true"
       },
       "android": {
-        "buildType": "apk"
+        "buildType": "apk",
+        "credentialsSource": "local"
       }
     },
     "production": {
@@ -38,7 +39,8 @@
         "EXPO_PUBLIC_PUSHER_TLS": "true"
       },
       "android": {
-        "buildType": "app-bundle"
+        "buildType": "app-bundle",
+        "credentialsSource": "local"
       },
       "ios": {
         "buildConfiguration": "Release"

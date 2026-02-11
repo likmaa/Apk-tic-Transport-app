@@ -451,7 +451,7 @@ export default function SearchingDriver() {
               style={[styles.supportButton, { backgroundColor: '#25D366' }]}
               onPress={() => {
                 const message = `Bonjour Support TIC,\n\nJe ne trouve pas de chauffeur pour ma course #${rideId}.\n\nDépart: ${origin?.address}\nDestination: ${destination?.address}\n\nPouvez-vous m'aider ?`;
-                Linking.openURL(`https://wa.me/22957792662?text=${encodeURIComponent(message)}`);
+                Linking.openURL(`https://wa.me/2290157792662?text=${encodeURIComponent(message)}`);
               }}
             >
               <Ionicons name="logo-whatsapp" size={24} color="#fff" />

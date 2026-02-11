@@ -15,6 +15,7 @@ import {
 import CustomHeader from "../components/CustomHeader";
 import { Colors } from "../theme"; // Assurez-vous que le chemin est correct vers votre fichier Colors.js
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { getImageUrl } from "../utils/images";
 
 export default function AccountScreen() {
     const navigation = useNavigation();
@@ -237,7 +238,7 @@ export default function AccountScreen() {
                     <View style={styles.profile}>
                         <Image
                             source={avatarUri
-                                ? { uri: avatarUri }
+                                ? { uri: getImageUrl(avatarUri) || "" }
                                 : require("../../assets/images/LOGO_OR.png")}
                             style={styles.avatar}
                         />

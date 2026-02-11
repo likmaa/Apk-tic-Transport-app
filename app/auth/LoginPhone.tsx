@@ -39,21 +39,21 @@ export default function LoginPhone() {
 
   const handlePhoneChange = (text: string) => {
     const formattedText = formatPhoneNumber(text);
-    if (formattedText.length <= 11) {
+    if (formattedText.length <= 14) { // 10 digits + 4 spaces
       setPhone(formattedText);
 
       const digits = formattedText.replace(/\s/g, "");
       if (digits.length === 0) {
         setError(null);
-      } else if (digits.length !== 8) {
-        setError("Le numéro doit contenir 8 chiffres.");
+      } else if (digits.length !== 8 && digits.length !== 10) {
+        setError("Le numéro doit contenir 8 ou 10 chiffres.");
       } else {
         setError(null);
       }
     }
   };
 
-  const isPhoneValid = phone.replace(/\s/g, "").length === 8;
+  const isPhoneValid = [8, 10].includes(phone.replace(/\s/g, "").length);
 
   const sendOTP = async () => {
     if (!isPhoneValid || loading) {
@@ -177,7 +177,7 @@ export default function LoginPhone() {
                   keyboardType="number-pad"
                   style={styles.input}
                   placeholderTextColor="#999"
-                  maxLength={11}
+                  maxLength={14}
                 />
               </View>
 

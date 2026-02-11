@@ -125,6 +125,27 @@ export default function PickLocationScreen() {
   const [isRecording, setIsRecording] = useState(false);
   const [orderMode, setOrderMode] = useState<'distance' | 'duration'>('distance');
   const [passengerType, setPassengerType] = useState<'self' | 'other'>('self');
+  const [assignmentReceived, setAssignmentReceived] = useState(false);
+  const [isDriverAssigned, setIsDriverAssigned] = useState(false);
+
+  const formatPhoneNumber = (text: string) => {
+    const cleaned = text.replace(/\D/g, "");
+    let formatted = "";
+    for (let i = 0; i < cleaned.length; i++) {
+      if (i > 0 && i % 2 === 0) {
+        formatted += " ";
+      }
+      formatted += cleaned[i];
+    }
+    return formatted;
+  };
+
+  const handlePassengerPhoneChange = (text: string) => {
+    const formatted = formatPhoneNumber(text);
+    if (formatted.length <= 14) { // 10 digits + 4 spaces
+      setPassengerPhone(formatted);
+    }
+  };
   const [passengerName, setPassengerName] = useState('');
   const [passengerPhone, setPassengerPhone] = useState('');
   const [isPassengerModalVisible, setIsPassengerModalVisible] = useState(false);
@@ -466,11 +487,12 @@ export default function PickLocationScreen() {
                   <Text style={styles.modalInputLabel}>Numéro de téléphone</Text>
                   <TextInput
                     style={styles.modalInputField}
-                    placeholder="Ex: +229 0 00 00 00"
+                    placeholder="97 23 45 67"
                     placeholderTextColor="#999"
                     keyboardType="phone-pad"
                     value={passengerPhone}
-                    onChangeText={setPassengerPhone}
+                    onChangeText={handlePassengerPhoneChange}
+                    maxLength={14}
                   />
                 </View>
               </View>
@@ -479,8 +501,9 @@ export default function PickLocationScreen() {
             <TouchableOpacity
               style={styles.modalConfirmButton}
               onPress={() => {
-                if (passengerType === 'other' && (!passengerName || !passengerPhone)) {
-                  Alert.alert("Information manquante", "Veuillez saisir le nom et le numéro du proche.");
+                const digits = passengerPhone.replace(/\s/g, "");
+                if (passengerType === 'other' && (!passengerName || ![8, 10].includes(digits.length))) {
+                  Alert.alert("Information manquante ou invalide", "Veuillez saisir le nom et un numéro de téléphone béninois (8 ou 10 chiffres).");
                   return;
                 }
                 setIsPassengerModalVisible(false);
