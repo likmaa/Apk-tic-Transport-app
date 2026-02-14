@@ -325,14 +325,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: Colors.white,
-    borderRadius: 24,
+    borderRadius: 12,
     padding: 10,
     marginBottom: 24,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.04,
-    shadowRadius: 12,
-    elevation: 3
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.02,
+    shadowRadius: 2,
+    elevation: 1
   },
   searchLeft: {
     flex: 1,
@@ -342,7 +342,7 @@ const styles = StyleSheet.create({
   searchIconBg: {
     width: 44,
     height: 44,
-    borderRadius: 22,
+    borderRadius: 10,
     backgroundColor: Colors.secondary,
     justifyContent: 'center',
     alignItems: 'center'
@@ -391,7 +391,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     padding: 16,
-    borderRadius: 20,
+    borderRadius: 10,
     marginBottom: 12,
     borderWidth: 1,
     borderColor: '#F3F4F6',
@@ -403,7 +403,7 @@ const styles = StyleSheet.create({
   typeIconBg: {
     width: 44,
     height: 44,
-    borderRadius: 22,
+    borderRadius: 10,
     backgroundColor: '#F9FAFB',
     justifyContent: 'center',
     alignItems: 'center',
@@ -429,7 +429,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: Colors.white,
-    borderRadius: 20,
+    borderRadius: 10,
     padding: 14,
     borderWidth: 1,
     borderColor: '#F3F4F6'
@@ -437,7 +437,7 @@ const styles = StyleSheet.create({
   homeIconBg: {
     width: 40,
     height: 40,
-    borderRadius: 20,
+    borderRadius: 10,
     backgroundColor: '#EEF2FF',
     justifyContent: 'center',
     alignItems: 'center',
@@ -480,7 +480,7 @@ const styles = StyleSheet.create({
   adWrapper: {
     width: 280,
     height: 140,
-    borderRadius: 20,
+    borderRadius: 10,
     overflow: 'hidden',
   },
   paginationDots: {
@@ -537,15 +537,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     backgroundColor: Colors.secondary,
     paddingVertical: 15,
-    borderRadius: 20,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 10,
-    shadowColor: Colors.secondary,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.2,
-    shadowRadius: 12,
-    elevation: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 2,
     marginBottom: 40
   },
   startRideButtonText: {

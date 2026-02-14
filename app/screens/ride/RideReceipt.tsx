@@ -142,21 +142,51 @@ export default function RideReceipt() {
 
   const handleSubmitRating = async () => {
     if (!rideId) {
-      router.replace('/');
+      router.replace('/(tabs)');
       return;
     }
     setLoading(true);
     try {
       const token = await AsyncStorage.getItem('authToken');
       const API_URL = process.env.EXPO_PUBLIC_API_URL;
+      const headers = {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+        Authorization: `Bearer ${token}`,
+      };
 
+      // Step 1: If wallet payment, confirm payment first
+      if (paymentMethod === 'wallet' && !paymentVerified) {
+        try {
+          const payRes = await fetchWithRetry(`${API_URL}/passenger/rides/${rideId}/pay`, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({ method: 'wallet' }),
+          });
+          if (payRes.ok) {
+            const payData = await payRes.json().catch(() => ({}));
+            setPaymentVerified(true);
+            // If partial payment, inform user about cash remainder
+            if (payData.cash_remainder && payData.cash_remainder > 0) {
+              Alert.alert(
+                'Paiement partiel',
+                `${payData.wallet_debited?.toLocaleString('fr-FR')} FCFA débités de votre wallet.\n\nVeuillez remettre ${payData.cash_remainder.toLocaleString('fr-FR')} FCFA en espèces au chauffeur.`
+              );
+            }
+          } else {
+            // Non-blocking: payment may have already been processed
+            const payErr = await payRes.json().catch(() => ({}));
+            console.warn('Wallet pay warning:', payErr);
+          }
+        } catch (payError) {
+          console.warn('Wallet pay error:', payError);
+        }
+      }
+
+      // Step 2: Submit rating
       const res = await fetchWithRetry(`${API_URL}/passenger/ratings`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Accept: 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
+        headers,
         body: JSON.stringify({
           ride_id: rideId,
           stars,
@@ -166,16 +196,23 @@ export default function RideReceipt() {
 
       if (res.ok) {
         Alert.alert('Merci !', 'Votre note a été enregistrée.', [
-          { text: 'OK', onPress: () => router.replace('/') }
+          { text: 'OK', onPress: () => router.replace('/(tabs)') }
         ]);
       } else {
         const errorData = await res.json().catch(() => ({}));
         // If rating already exists, still allow user to continue
         if (res.status === 409) {
-          router.replace('/');
+          router.replace('/(tabs)');
         } else {
           console.warn('Rating error:', errorData);
-          Alert.alert('Erreur', 'Impossible d\'enregistrer votre note. Veuillez réessayer.');
+          Alert.alert(
+            'Erreur',
+            'Impossible d\'enregistrer votre note sur le serveur.',
+            [
+              { text: 'Réessayer', style: 'default' },
+              { text: 'Continuer sans noter', style: 'cancel', onPress: () => router.replace('/(tabs)') }
+            ]
+          );
         }
       }
     } catch (e) {

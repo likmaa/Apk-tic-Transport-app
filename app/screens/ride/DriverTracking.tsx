@@ -373,12 +373,12 @@ export default function DriverTracking() {
     const interval = setInterval(async () => {
       const timeSinceLastUpdate = Date.now() - lastUpdateAt;
 
-      // If no update for 20 seconds, poll
-      if (timeSinceLastUpdate > 20000) {
+      // If no update for 10 seconds, poll (reduced from 20s for better responsiveness)
+      if (timeSinceLastUpdate > 10000) {
         setIsPolling(true);
         try {
           const token = await AsyncStorage.getItem('authToken');
-          const res = await fetch(`${API_URL}/passenger/rides/${rideId}/driver-location`, {
+          const res = await fetch(`${API_URL}/passenger/rides/${rideId}`, {
             headers: {
               Accept: 'application/json',
               Authorization: `Bearer ${token}`,
@@ -386,10 +386,46 @@ export default function DriverTracking() {
           });
           if (res.ok) {
             const data = await res.json();
-            if (data.lat && data.lng) {
+
+            if (data.status) {
+              setRideStatus(data.status);
+
+              if (data.status === 'arrived' && data.arrived_at) {
+                setArrivedAt(data.arrived_at);
+              }
+
+              if (['ongoing', 'started'].includes(data.status)) {
+                navigation.navigate({
+                  name: 'screens/ride/OngoingRide',
+                  params: { vehicleName: vehicleNameParam || 'Véhicule', rideId: String(rideId) }
+                } as never);
+                return;
+              }
+
+              if (data.status === 'completed') {
+                navigation.navigate({
+                  name: 'screens/ride/RideReceipt',
+                  params: {
+                    rideId: String(rideId),
+                    amount: data.fare_amount || 0,
+                    distanceKm: (data.distance_m || 0) / 1000,
+                    vehicleName: vehicleNameParam || 'Véhicule',
+                    paymentMethod: data.payment_method || method,
+                    breakdown: data.breakdown,
+                    pickupLat: data.pickup_lat,
+                    pickupLng: data.pickup_lng,
+                    dropoffLat: data.dropoff_lat,
+                    dropoffLng: data.dropoff_lng,
+                  }
+                } as never);
+                return;
+              }
+            }
+
+            if (data.driver_lat && data.driver_lng) {
               setDriverPos({
-                latitude: Number(data.lat),
-                longitude: Number(data.lng),
+                latitude: Number(data.driver_lat),
+                longitude: Number(data.driver_lng),
               });
               setLastUpdateAt(Date.now());
             }

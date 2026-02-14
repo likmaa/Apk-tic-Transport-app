@@ -105,7 +105,7 @@ const UserLocationMarker = () => {
     <View style={styles.originMarkerContainer}>
       <Animated.View style={[styles.pulseRing, pulseStyle]} />
       <View style={styles.originMarkerIconContainer}>
-        <Ionicons name="location-sharp" size={32} color="#10b981" />
+        <MaterialCommunityIcons name="map-marker" size={36} color="#E53935" />
       </View>
     </View>
   );

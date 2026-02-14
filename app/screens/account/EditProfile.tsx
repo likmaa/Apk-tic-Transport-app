@@ -21,27 +21,33 @@ export default function EditProfile() {
     const loadProfile = async () => {
       try {
         const storedUser = await AsyncStorage.getItem('authUser');
+        console.log('[PHOTO DEBUG] 1. AsyncStorage authUser:', storedUser ? JSON.parse(storedUser) : null);
         if (storedUser) {
           const user = JSON.parse(storedUser);
           if (user.name) setName(String(user.name));
           if (user.email) setEmail(user.email);
           if (user.phone) setPhone(user.phone);
           const storedAvatar = user.photo || user.avatar;
+          console.log('[PHOTO DEBUG] 2. storedAvatar brut:', storedAvatar);
           if (storedAvatar) {
-            setAvatarUri(getImageUrl(storedAvatar));
+            const resolved = getImageUrl(storedAvatar);
+            console.log('[PHOTO DEBUG] 3. getImageUrl(storedAvatar):', resolved);
+            setAvatarUri(resolved);
           }
         }
 
         if (!API_URL) {
+          console.log('[PHOTO DEBUG] API_URL manquant, arrêt');
           return;
         }
 
         const token = await AsyncStorage.getItem('authToken');
         if (!token) {
+          console.log('[PHOTO DEBUG] Token manquant, arrêt');
           return;
         }
 
-        const res = await fetch(`${API_URL}/auth/profile`, {
+        const res = await fetch(`${API_URL}/auth/me`, {
           headers: {
             Accept: 'application/json',
             Authorization: `Bearer ${token}`,
@@ -49,7 +55,9 @@ export default function EditProfile() {
         });
 
         const json = await res.json().catch(() => null);
+        console.log('[PHOTO DEBUG] 4. API /auth/me status:', res.status, 'photo field:', json?.photo);
         if (!res.ok || !json) {
+          console.log('[PHOTO DEBUG] API /auth/profile échoué');
           return;
         }
 
@@ -57,13 +65,18 @@ export default function EditProfile() {
         if (json.email) setEmail(json.email);
         if (json.phone) setPhone(json.phone);
         const apiAvatar = json.photo;
+        console.log('[PHOTO DEBUG] 5. apiAvatar brut depuis API:', apiAvatar);
         if (apiAvatar) {
-          setAvatarUri(getImageUrl(apiAvatar));
+          const resolved = getImageUrl(apiAvatar);
+          console.log('[PHOTO DEBUG] 6. getImageUrl(apiAvatar):', resolved);
+          setAvatarUri(resolved);
+        } else {
+          console.log('[PHOTO DEBUG] 5b. PAS de photo dans la réponse API !');
         }
 
         await AsyncStorage.setItem('authUser', JSON.stringify({ ...json }));
       } catch (e) {
-        console.warn('Erreur chargement profil', e);
+        console.warn('[PHOTO DEBUG] Erreur chargement profil', e);
       }
     };
 
@@ -90,17 +103,21 @@ export default function EditProfile() {
       formData.append('phone', phone);
       formData.append('_method', 'PUT'); // Spoofing PUT because multipart/form-data works best with POST
 
+      console.log('[PHOTO DEBUG] 7. handleSave - avatarUri actuel:', avatarUri);
       if (avatarUri && !avatarUri.startsWith('http')) {
         // C'est un fichier local à envoyer
         const filename = avatarUri.split('/').pop();
         const match = /\.(\w+)$/.exec(filename || '');
         const type = match ? `image/${match[1]}` : `image`;
+        console.log('[PHOTO DEBUG] 8. Upload photo locale:', { uri: avatarUri, name: filename, type });
 
         formData.append('photo', {
           uri: avatarUri,
           name: filename,
           type,
         } as any);
+      } else {
+        console.log('[PHOTO DEBUG] 8b. Pas d\'upload photo (commence par http ou null)');
       }
 
       const res = await fetch(`${API_URL}/auth/profile`, {
@@ -114,6 +131,7 @@ export default function EditProfile() {
       });
 
       const json = await res.json().catch(() => null);
+      console.log('[PHOTO DEBUG] 9. Réponse save - status:', res.status, 'json:', JSON.stringify(json));
       if (!res.ok || !json) {
         const msg = (json && (json.message || json.error)) || 'Impossible de mettre à jour le profil.';
         Alert.alert('Erreur', msg);
@@ -122,8 +140,13 @@ export default function EditProfile() {
 
       // Mettre à jour le user local avec les données serveur (qui incluent le nouvel URL de la photo)
       const updatedPhoto = json.photo;
+      console.log('[PHOTO DEBUG] 10. updatedPhoto brut du serveur:', updatedPhoto);
       if (updatedPhoto) {
-        setAvatarUri(getImageUrl(updatedPhoto));
+        const resolved = getImageUrl(updatedPhoto);
+        console.log('[PHOTO DEBUG] 11. getImageUrl(updatedPhoto):', resolved);
+        setAvatarUri(resolved);
+      } else {
+        console.log('[PHOTO DEBUG] 10b. PAS de photo dans réponse save !');
       }
 
       await AsyncStorage.setItem('authUser', JSON.stringify({ ...json }));
@@ -153,9 +176,11 @@ export default function EditProfile() {
       if (result.canceled) return;
 
       const uri = result.assets?.[0]?.uri;
+      console.log('[PHOTO DEBUG] 12. Photo sélectionnée URI:', uri);
       if (!uri) return;
 
       setAvatarUri(uri);
+      console.log('[PHOTO DEBUG] 13. avatarUri mis à jour avec URI locale');
 
       const storedUser = await AsyncStorage.getItem('authUser');
       if (storedUser) {
@@ -192,10 +217,13 @@ export default function EditProfile() {
     <SafeAreaView style={styles.container}>
       <View style={styles.content}>
         <View style={styles.avatarContainer}>
+          {(() => { console.log('[PHOTO DEBUG] 14. RENDER avatarUri:', avatarUri); return null; })()}
           <Image
-            source={avatarUri ? { uri: getImageUrl(avatarUri) || '' } : require('../../../assets/images/LOGO_OR.png')}
+            source={avatarUri ? { uri: avatarUri } : require('../../../assets/images/LOGO_OR.png')}
             style={[styles.avatar, { backgroundColor: '#E2E8F0' }]}
             resizeMode="cover"
+            onError={(e) => console.log('[PHOTO DEBUG] 15. Image onError:', e.nativeEvent.error, 'URI was:', avatarUri)}
+            onLoad={() => console.log('[PHOTO DEBUG] 16. Image chargée OK')}
           />
           <TouchableOpacity style={styles.changePhotoBtn} onPress={handleChangePhoto}>
             <Text style={styles.changePhotoText}>Changer la photo</Text>

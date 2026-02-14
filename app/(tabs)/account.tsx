@@ -50,11 +50,11 @@ export default function AccountTab() {
             photo: photoUrl || undefined
           });
 
-          // Mettre à jour le cache local
+          // Mettre à jour le cache local avec le path brut (pas l'URL transformée)
           const storedUser = await AsyncStorage.getItem('authUser');
           if (storedUser) {
             const userObj = JSON.parse(storedUser);
-            await AsyncStorage.setItem('authUser', JSON.stringify({ ...userObj, photo: photoUrl, avatar: photoUrl }));
+            await AsyncStorage.setItem('authUser', JSON.stringify({ ...userObj, photo: data.photo, avatar: data.photo }));
           }
         }
       } catch (e) {
@@ -102,7 +102,7 @@ export default function AccountTab() {
           <View style={styles.avatarContainer}>
             {user?.photo ? (
               <Image
-                source={{ uri: getImageUrl(user.photo) || '' }}
+                source={{ uri: user.photo || '' }}
                 style={[styles.avatarImage, { backgroundColor: '#E2E8F0' }]}
                 resizeMode="cover"
               />

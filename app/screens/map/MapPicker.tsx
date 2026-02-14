@@ -2,7 +2,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, View, TouchableOpacity, ActivityIndicator, Dimensions, TextInput, Animated, PanResponder, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { MapPlaceholder } from '../../components/MapPlaceholder';
 
 // Tentative d'importation sécurisée de Mapbox
@@ -201,7 +201,7 @@ export default function MapPickerScreen() {
               <Text style={styles.selectionTooltipText}>{revLoading ? 'Chargement...' : 'Position choisie'}</Text>
               <View style={styles.selectionTooltipArrow} />
             </View>
-            <Ionicons name="location" size={48} color={Colors.primary} style={styles.pinIcon} />
+            <MaterialCommunityIcons name="map-marker" size={52} color="#E53935" style={styles.pinIcon} />
             <View style={styles.pinShadow} />
           </View>
         </View>

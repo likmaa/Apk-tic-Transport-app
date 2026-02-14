@@ -157,7 +157,7 @@ export default function RootLayout() {
                     <Stack.Screen name="screens/wallet/Transactions" options={{ headerShown: true, title: "Historique" }} />
                     <Stack.Screen name="screens/map/PickLocation" options={{ headerShown: true, title: "Choisir une adresse" }} />
                     <Stack.Screen name="screens/delivery/PackageDetails" options={{ headerShown: true, title: "Détails du colis" }} />
-                    <Stack.Screen name="screens/payment/PaymentOptions" options={{ headerShown: true, title: "Paiement" }} />
+                    <Stack.Screen name="screens/payment/PaymentOptions" options={{ headerShown: false, title: "Paiement" }} />
                     <Stack.Screen name="screens/ride/RideSummary" options={{ headerShown: false }} />
                     <Stack.Screen name="screens/ride/SearchingDriver" options={{ headerShown: false }} />
                     <Stack.Screen name="screens/ride/OngoingRide" options={{ headerShown: false }} />

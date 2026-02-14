@@ -10,7 +10,7 @@ import { usePaymentStore } from '../../providers/PaymentProvider';
 // Données pour les options de paiement pour un rendu dynamique
 const paymentMethods = [
   { key: 'cash', label: 'Espèces', icon: 'cash-outline' },
-  { key: 'mobile_money', label: 'Mobile Money', icon: 'phone-portrait-outline' },
+  { key: 'mobile_money', label: 'TIC Wallet', icon: 'wallet-outline' },
   { key: 'card', label: 'Carte bancaire', icon: 'card-outline' },
   { key: 'qr', label: 'QR Code', icon: 'qr-code-outline' },
 ] as const; // 'as const' pour un typage plus strict
@@ -38,8 +38,8 @@ export default function PaymentOptions() {
       <ScrollView contentContainerStyle={styles.scrollContent}>
         {/* Section Portefeuille */}
         <Text style={styles.sectionTitle}>Portefeuille & Promotions</Text>
-        <TouchableOpacity 
-          style={[styles.card, method === 'wallet' && styles.cardActive]} 
+        <TouchableOpacity
+          style={[styles.card, method === 'wallet' && styles.cardActive]}
           onPress={() => setMethod('wallet')}
           activeOpacity={0.8}
         >
@@ -66,10 +66,10 @@ export default function PaymentOptions() {
         <Text style={styles.sectionTitle}>Autres moyens de paiement</Text>
         <View style={styles.card}>
           {paymentMethods.map((item, index) => (
-            <TouchableOpacity 
+            <TouchableOpacity
               key={item.key}
               style={[
-                styles.optionRow, 
+                styles.optionRow,
                 index < paymentMethods.length - 1 && styles.borderBottom,
                 method === item.key && styles.optionRowActive
               ]}
@@ -121,7 +121,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'white',
     borderBottomWidth: 1,
     borderBottomColor: Colors.lightGray,
-    marginTop:30,
+    marginTop: 30,
   },
   backButton: {
     width: 44,
@@ -233,7 +233,7 @@ const styles = StyleSheet.create({
     paddingBottom: 30, // Espace pour la zone de sécurité en bas
     borderTopWidth: 1,
     borderTopColor: Colors.lightGray,
-    marginBottom:20
+    marginBottom: 20
   },
   confirmButton: {
     backgroundColor: Colors.primary,

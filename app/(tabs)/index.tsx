@@ -1,6 +1,6 @@
-import React, { useRef, useMemo, useState, useEffect } from 'react';
+import React, { useRef, useMemo, useState, useEffect, useCallback } from 'react';
 import { SafeAreaView, StyleSheet, Text, View, TouchableOpacity, ScrollView, Image, Alert, StatusBar } from 'react-native';
-import { useNavigation, useRouter } from 'expo-router';
+import { useNavigation, useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -86,38 +86,40 @@ export default function HomeTab() {
   }, [API_URL, router]);
 
   // 2. Check for Active Ride (show banner instead of auto-redirect)
-  useEffect(() => {
-    const checkActiveRide = async () => {
-      try {
-        if (!API_URL) return;
-        const token = await AsyncStorage.getItem("authToken");
-        if (!token) return;
+  useFocusEffect(
+    useCallback(() => {
+      const checkActiveRide = async () => {
+        try {
+          if (!API_URL) return;
+          const token = await AsyncStorage.getItem("authToken");
+          if (!token) return;
 
-        const res = await fetch(`${API_URL}/passenger/rides/current`, {
-          headers: {
-            Accept: "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-        });
+          const res = await fetch(`${API_URL}/passenger/rides/current`, {
+            headers: {
+              Accept: "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+          });
 
-        if (!res.ok) {
+          if (!res.ok) {
+            setActiveRide(null);
+            return;
+          }
+          const ride = await res.json();
+
+          if (ride && ride.id) {
+            setActiveRide(ride);
+          } else {
+            setActiveRide(null);
+          }
+        } catch (err) {
+          console.warn("Active ride check error:", err);
           setActiveRide(null);
-          return;
         }
-        const ride = await res.json();
-
-        if (ride && ride.id) {
-          setActiveRide(ride);
-        } else {
-          setActiveRide(null);
-        }
-      } catch (err) {
-        console.warn("Active ride check error:", err);
-        setActiveRide(null);
-      }
-    };
-    checkActiveRide();
-  }, [API_URL]);
+      };
+      checkActiveRide();
+    }, [API_URL])
+  );
 
   // Navigate to active ride screen
   const handleReturnToRide = () => {
@@ -303,14 +305,14 @@ const styles = StyleSheet.create({
   notificationBtn: {
     width: 44,
     height: 44,
-    borderRadius: 14,
+    borderRadius: 10,
     backgroundColor: Colors.white,
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.03,
-    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
     elevation: 2
   },
   notificationDot: {
@@ -326,17 +328,17 @@ const styles = StyleSheet.create({
   },
 
   walletCard: {
-    borderRadius: 24,
+    borderRadius: 12,
     padding: 20,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 24,
-    shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 6
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 2
   },
   walletInfo: { flex: 1 },
   walletRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 4 },
@@ -356,13 +358,13 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.white,
     paddingHorizontal: 16,
     paddingVertical: 10,
-    borderRadius: 14,
+    borderRadius: 10,
     flexDirection: 'row',
     alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4
+    shadowOpacity: 0.04,
+    shadowRadius: 6
   },
   addFundsText: {
     fontFamily: Fonts.titilliumWebBold,
@@ -384,7 +386,7 @@ const styles = StyleSheet.create({
     bottom: 90,
     left: 20,
     right: 20,
-    borderRadius: 16,
+    borderRadius: 12,
     shadowColor: '#FF6B35',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
@@ -392,7 +394,7 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   activeRideBannerGradient: {
-    borderRadius: 16,
+    borderRadius: 12,
     padding: 16,
   },
   activeRideBannerContent: {

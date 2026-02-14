@@ -137,8 +137,7 @@ export default function OngoingRide() {
               amount: payload.fare_amount || rideData?.fare_amount || 0,
               distanceKm: (payload.distance_m || rideData?.distance_m || 0) / 1000,
               vehicleName,
-              breakdown: payload.breakdown ? JSON.stringify(payload.breakdown) : undefined, // Pass stringified breakdown
-              // Pass coordinates for Map display
+              breakdown: payload.breakdown ? JSON.stringify(payload.breakdown) : undefined,
               pickupLat: origin?.lat || rideData?.pickup_lat || 0,
               pickupLng: origin?.lon || rideData?.pickup_lng || 0,
               dropoffLat: destination?.lat || rideData?.dropoff_lat || 0,
@@ -146,6 +145,16 @@ export default function OngoingRide() {
               paymentMethod: rideData?.payment_method || 'cash',
             }
           });
+        });
+
+        channel.bind('ride.arrived', (payload: any) => {
+          if (cancelled) return;
+          setRideData((prev: any) => prev ? { ...prev, status: 'arrived', arrived_at: payload.arrived_at } : prev);
+        });
+
+        channel.bind('ride.started', (payload: any) => {
+          if (cancelled) return;
+          setRideData((prev: any) => prev ? { ...prev, status: 'ongoing', started_at: payload.started_at } : prev);
         });
 
       } catch (error) {
@@ -170,11 +179,11 @@ export default function OngoingRide() {
     const interval = setInterval(async () => {
       const timeSinceLastUpdate = Date.now() - lastUpdateAt;
 
-      // If no update for 20 seconds, poll
-      if (timeSinceLastUpdate > 20000) {
+      // If no update for 10 seconds, poll (reduced from 20s for better responsiveness)
+      if (timeSinceLastUpdate > 10000) {
         setIsPolling(true);
         try {
-          const res = await fetchWithRetry(`${API_URL}/passenger/rides/${rideId}/driver-location`, {
+          const res = await fetchWithRetry(`${API_URL}/passenger/rides/${rideId}`, {
             headers: {
               Accept: 'application/json',
               Authorization: `Bearer ${token}`,
@@ -182,10 +191,33 @@ export default function OngoingRide() {
           });
           if (res.ok) {
             const data = await res.json();
-            if (data.lat && data.lng) {
+
+            // Update ride data including potential status change
+            if (data?.status === 'completed') {
+              router.replace({
+                pathname: '/screens/ride/RideReceipt',
+                params: {
+                  rideId: String(rideId),
+                  amount: data.fare_amount || 0,
+                  distanceKm: (data.distance_m || 0) / 1000,
+                  vehicleName,
+                  breakdown: data.breakdown ? JSON.stringify(data.breakdown) : undefined,
+                  pickupLat: data.pickup_lat || 0,
+                  pickupLng: data.pickup_lng || 0,
+                  dropoffLat: data.dropoff_lat || 0,
+                  dropoffLng: data.dropoff_lng || 0,
+                  paymentMethod: data.payment_method || 'cash',
+                }
+              });
+              return;
+            }
+
+            setRideData(data);
+
+            if (data.driver_lat && data.driver_lng) {
               setDriverPos({
-                latitude: Number(data.lat),
-                longitude: Number(data.lng),
+                latitude: Number(data.driver_lat),
+                longitude: Number(data.driver_lng),
               });
               setLastUpdateAt(Date.now());
             }

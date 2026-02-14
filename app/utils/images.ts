@@ -5,7 +5,7 @@ export const getImageUrl = (path: string | null) => {
 
     if (!path.startsWith('http') && !path.startsWith('file://')) {
         const cleanedPath = path.replace(/^\/?storage\//, '');
-        const baseUrl = API_URL ? API_URL.replace('/api', '') : '';
+        const baseUrl = API_URL ? API_URL.replace(/\/api\/?$/, '') : '';
         url = `${baseUrl}/storage/${cleanedPath}`;
     }
 

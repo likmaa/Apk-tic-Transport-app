@@ -300,13 +300,13 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.white,
     paddingHorizontal: 16,
     paddingVertical: 10,
-    borderRadius: 14,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: '#F0F0F0',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 5
+    shadowOpacity: 0.04,
+    shadowRadius: 6
   },
   linePillActive: {
     backgroundColor: Colors.primary,
@@ -317,20 +317,20 @@ const styles = StyleSheet.create({
 
   formCard: {
     backgroundColor: Colors.white,
-    borderRadius: 24,
+    borderRadius: 12,
     padding: 14,
     marginBottom: 16,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.03,
-    shadowRadius: 10,
-    elevation: 3
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 2
   },
   inputBox: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10 },
   iconDot: {
     width: 36,
     height: 36,
-    borderRadius: 18,
+    borderRadius: 10,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 15
@@ -345,7 +345,7 @@ const styles = StyleSheet.create({
   smallCard: {
     flex: 1,
     backgroundColor: Colors.white,
-    borderRadius: 20,
+    borderRadius: 10,
     padding: 16,
     flexDirection: 'row',
     alignItems: 'center',
@@ -361,7 +361,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     backgroundColor: '#EEF2FF',
     padding: 12,
-    borderRadius: 16
+    borderRadius: 10
   },
   priceLabel: { fontFamily: Fonts.titilliumWeb, fontSize: 14, color: Colors.primary, marginRight: 8 },
   priceValue: { fontFamily: Fonts.titilliumWebBold, fontSize: 18, color: Colors.primary },
@@ -370,15 +370,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     backgroundColor: Colors.secondary,
     paddingVertical: 15,
-    borderRadius: 24,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 10,
-    shadowColor: Colors.secondary,
-    shadowOffset: { width: 0, height: 5 },
-    shadowOpacity: 0.2,
-    shadowRadius: 10,
-    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 2,
     marginBottom: 20
   },
   confirmButtonText: { color: Colors.white, fontFamily: Fonts.titilliumWebBold, fontSize: 16 },
@@ -392,7 +392,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#F5F8FF',
     padding: 16,
-    borderRadius: 16,
+    borderRadius: 10,
     marginBottom: 20
   },
   myLocationText: { fontFamily: Fonts.titilliumWebBold, fontSize: 15, color: Colors.primary, marginLeft: 12 },

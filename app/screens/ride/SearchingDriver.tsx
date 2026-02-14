@@ -293,19 +293,54 @@ export default function SearchingDriver() {
 
     subscribe();
 
-    // Periodic state saving
-    const saveInterval = setInterval(() => {
+    // Periodic state saving & Status polling (fallback)
+    const interval = setInterval(async () => {
+      // Periodic state saving
       if (rideId && origin && destination) {
         saveRideState({ rideId, origin, destination, vehicleName, status: 'searching' }).catch(() => { });
       }
-    }, 15000);
+
+      // Status polling (fallback if Pusher fails)
+      if (rideId && API_URL && !assignmentReceived) {
+        try {
+          const token = await AsyncStorage.getItem('authToken');
+          const res = await fetch(`${API_URL}/passenger/rides/${rideId}`, {
+            headers: {
+              Accept: 'application/json',
+              Authorization: `Bearer ${token}`,
+            },
+          });
+          if (res.ok) {
+            const json = await res.json();
+            if (json.status !== 'searching' && json.status !== 'pending') {
+              // Ride was accepted or moved to another state
+              if (['accepted', 'arrived', 'ongoing', 'started'].includes(json.status)) {
+                setAssignmentReceived(true);
+                router.replace({
+                  pathname: '/screens/ride/DriverTracking',
+                  params: {
+                    vehicleName,
+                    rideId: String(rideId),
+                    driver: JSON.stringify(json.driver),
+                  },
+                });
+              } else if (json.status === 'cancelled') {
+                router.replace('/(tabs)');
+              }
+            }
+          }
+        } catch (e) {
+          console.warn('Status polling fallback failed', e);
+        }
+      }
+    }, 15000); // Every 15s
 
     return () => {
       cancelled = true;
-      clearInterval(saveInterval);
+      clearInterval(interval);
       unsubscribeChannel(channel);
     };
-  }, [rideId, router, vehicleName, origin, destination]);
+  }, [rideId, router, vehicleName, origin, destination, assignmentReceived]);
 
   // Surveiller la connexion réseau
   useEffect(() => {
