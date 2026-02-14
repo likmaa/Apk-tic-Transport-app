@@ -118,6 +118,17 @@ export default function AccountScreen() {
         loadUser();
     }, [API_URL, navigation]);
 
+    const [devClickCount, setDevClickCount] = useState(0);
+    const handleDevTrigger = () => {
+        const newCount = devClickCount + 1;
+        if (newCount >= 5) {
+            setDevClickCount(0);
+            navigation.navigate('screens/settings/DevPanel' as never);
+        } else {
+            setDevClickCount(newCount);
+        }
+    };
+
     const fullName = user?.name || "Compte utilisateur";
     const email = user?.email || "Email non renseigné";
     const phone = user?.phone || "Téléphone non renseigné";
@@ -385,6 +396,14 @@ export default function AccountScreen() {
                 >
                     <Ionicons name="log-out-outline" size={22} color={Colors.error} />
                     <Text style={styles.logoutText}>Déconnexion</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                    onPress={handleDevTrigger}
+                    activeOpacity={1}
+                    style={{ marginVertical: 20, alignItems: 'center' }}
+                >
+                    <Text style={{ color: Colors.gray, fontSize: 12, opacity: 0.5 }}>TIC Miton Passager v1.0.2</Text>
                 </TouchableOpacity>
 
                 {/* Add some bottom padding to the scroll view content */}

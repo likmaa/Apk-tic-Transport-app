@@ -84,6 +84,7 @@ declare global {
       "auth/LoginPhone": undefined;
       "auth/OTPVerification": undefined;
       "(tabs)": undefined;
+      "screens/settings/DevPanel": undefined;
     }
   }
 }
@@ -164,6 +165,7 @@ export default function RootLayout() {
                     <Stack.Screen name="screens/ride/RideReceipt" options={{ headerShown: false }} />
                     <Stack.Screen name="screens/ride/History" options={{ headerShown: true, title: "Historique des courses" }} />
                     <Stack.Screen name="screens/ride/ContactDriver" options={{ headerShown: true, title: "Contacter le chauffeur" }} />
+                    <Stack.Screen name="screens/settings/DevPanel" options={{ headerShown: false }} />
                   </Stack>
                 </LocationProvider>
               </PaymentProvider>

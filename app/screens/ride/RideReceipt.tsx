@@ -9,6 +9,7 @@ import { useServiceStore } from '../../providers/ServiceProvider';
 import { usePaymentStore } from '../../providers/PaymentProvider';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { fetchWithRetry } from '../../utils/networkHandler';
 
 import { MapPlaceholder } from '../../components/MapPlaceholder';
 
@@ -149,7 +150,7 @@ export default function RideReceipt() {
       const token = await AsyncStorage.getItem('authToken');
       const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
-      const res = await fetch(`${API_URL}/passenger/ratings`, {
+      const res = await fetchWithRetry(`${API_URL}/passenger/ratings`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

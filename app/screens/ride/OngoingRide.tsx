@@ -14,7 +14,8 @@ import {
   subscribeToNetworkChanges,
   saveRideState,
   showNetworkErrorAlert,
-  checkNetworkConnection
+  checkNetworkConnection,
+  fetchWithRetry
 } from '../../utils/networkHandler';
 import { useSmoothMarker } from '../../hooks/useSmoothMarker';
 
@@ -80,7 +81,7 @@ export default function OngoingRide() {
 
     (async () => {
       try {
-        const res = await fetch(`${API_URL}/passenger/rides/${rideId}`, {
+        const res = await fetchWithRetry(`${API_URL}/passenger/rides/${rideId}`, {
           headers: {
             Accept: 'application/json',
             Authorization: `Bearer ${token}`,
@@ -173,7 +174,7 @@ export default function OngoingRide() {
       if (timeSinceLastUpdate > 20000) {
         setIsPolling(true);
         try {
-          const res = await fetch(`${API_URL}/passenger/rides/${rideId}/driver-location`, {
+          const res = await fetchWithRetry(`${API_URL}/passenger/rides/${rideId}/driver-location`, {
             headers: {
               Accept: 'application/json',
               Authorization: `Bearer ${token}`,
@@ -219,7 +220,7 @@ export default function OngoingRide() {
       } else if (state.isConnected && !wasOnline && rideId) {
         // Reconnexion : recharger les données
         if (API_URL && token) {
-          fetch(`${API_URL}/passenger/rides/${rideId}`, {
+          fetchWithRetry(`${API_URL}/passenger/rides/${rideId}`, {
             headers: {
               Accept: 'application/json',
               Authorization: `Bearer ${token}`,

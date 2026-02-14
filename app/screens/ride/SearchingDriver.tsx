@@ -42,7 +42,9 @@ import { getPusherClient, unsubscribeChannel } from '../../services/pusherClient
 import {
   subscribeToNetworkChanges,
   showNetworkErrorAlert,
-  checkNetworkConnection
+  checkNetworkConnection,
+  fetchWithRetry,
+  saveRideState
 } from '../../utils/networkHandler';
 
 if (Mapbox) {
@@ -168,7 +170,7 @@ export default function SearchingDriver() {
       try {
         setLoadingDetails(true);
         const token = await AsyncStorage.getItem('authToken');
-        const res = await fetch(`${API_URL}/passenger/rides/${rideId}`, {
+        const res = await fetchWithRetry(`${API_URL}/passenger/rides/${rideId}`, {
           headers: {
             Accept: 'application/json',
             ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -222,7 +224,7 @@ export default function SearchingDriver() {
     const fetchDrivers = async () => {
       try {
         const token = await AsyncStorage.getItem('authToken');
-        const res = await fetch(`${API_URL}/passenger/drivers/nearby?lat=${origin.lat}&lng=${origin.lon}&radius=5`, {
+        const res = await fetchWithRetry(`${API_URL}/passenger/drivers/nearby?lat=${origin.lat}&lng=${origin.lon}&radius=5`, {
           headers: {
             Accept: 'application/json',
             ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -291,11 +293,19 @@ export default function SearchingDriver() {
 
     subscribe();
 
+    // Periodic state saving
+    const saveInterval = setInterval(() => {
+      if (rideId && origin && destination) {
+        saveRideState({ rideId, origin, destination, vehicleName, status: 'searching' }).catch(() => { });
+      }
+    }, 15000);
+
     return () => {
       cancelled = true;
+      clearInterval(saveInterval);
       unsubscribeChannel(channel);
     };
-  }, [rideId, router, vehicleName]);
+  }, [rideId, router, vehicleName, origin, destination]);
 
   // Surveiller la connexion réseau
   useEffect(() => {

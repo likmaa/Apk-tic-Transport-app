@@ -10,6 +10,7 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useLocationStore } from '../../providers/LocationProvider';
 import { usePaymentStore } from '../../providers/PaymentProvider';
 import { useServiceStore } from '../../providers/ServiceProvider';
+import { fetchWithRetry, saveRideState } from '../../utils/networkHandler';
 import BottomSheet, { BottomSheetView, BottomSheetScrollView } from '@gorhom/bottom-sheet';
 
 // Tentative d'importation sécurisée de Mapbox
@@ -128,7 +129,7 @@ export default function ConfirmRide() {
           return;
         }
         console.log(`📡 Fetching estimate from: ${API_URL}/routing/estimate`);
-        const res = await fetch(`${API_URL}/routing/estimate`, {
+        const res = await fetchWithRetry(`${API_URL}/routing/estimate`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -140,7 +141,7 @@ export default function ConfirmRide() {
         });
 
         if (!res.ok) {
-          const errorText = await res.text();
+          const errorText = await res.text().catch(() => 'Unknown error');
           console.error(`❌ Estimate API error (${res.status}):`, errorText);
           setPriceEstimate(-1); // Signal error
           return;
@@ -151,6 +152,16 @@ export default function ConfirmRide() {
         const serverPrice = data?.price as number | undefined;
         if (typeof serverPrice === 'number') {
           setPriceEstimate(serverPrice);
+          // Persist the estimate state
+          saveRideState({
+            origin,
+            destination,
+            price: serverPrice,
+            vehicleType,
+            luggageCount,
+            dist: data.distance_m,
+            duration: data.eta_s
+          }).catch(() => { });
         } else {
           console.warn("⚠️ Price not found in response data");
           setPriceEstimate(-1);
@@ -506,7 +517,7 @@ export default function ConfirmRide() {
               try {
                 setSubmitting(true);
                 const token = await AsyncStorage.getItem('authToken');
-                const res = await fetch(`${API_URL}/trips/create`, {
+                const res = await fetchWithRetry(`${API_URL}/trips/create`, {
                   method: 'POST',
                   headers: {
                     'Content-Type': 'application/json',
@@ -541,6 +552,9 @@ export default function ConfirmRide() {
                   Alert.alert('Erreur', json?.message || 'Impossible de créer la course.');
                   return;
                 }
+
+                // Save initial ride state
+                saveRideState({ rideId: json.id, status: 'searching', vehicleName: vehicleType === 'vip' ? 'VIP' : 'Standard' }).catch(() => { });
 
                 router.replace({
                   pathname: '/screens/ride/SearchingDriver',

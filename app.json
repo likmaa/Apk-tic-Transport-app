@@ -4,7 +4,7 @@
     "slug": "transport",
     "version": "1.0.2",
     "orientation": "portrait",
-    "icon": "./assets/images/app-icon.png",
+    "icon": "./assets/images/play-store-icon.png",
     "scheme": "ticmiton",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
@@ -30,7 +30,7 @@
       "versionCode": 4,
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/images/app-icon.png"
+        "foregroundImage": "./assets/images/play-store-icon.png"
       },
       "permissions": [
         "android.permission.ACCESS_FINE_LOCATION",

@@ -6,6 +6,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '../theme';
 import { Fonts } from '../font';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { fetchWithRetry } from '../utils/networkHandler';
 
 type TxType = 'ride' | 'topup' | 'delivery';
 type Tx = {
@@ -26,10 +27,10 @@ const TransactionItem = ({ item, isLast }: { item: Tx, isLast: boolean }) => {
     return (
         <View style={[styles.transactionItem, isLast && { borderBottomWidth: 0 }]}>
             <View style={[styles.transactionIcon, { backgroundColor: isPositive ? '#E8F5E9' : Colors.lightGray }]}>
-                <MaterialCommunityIcons 
-                    name={iconName} 
-                    size={24} 
-                    color={isPositive ? '#4CAF50' : Colors.black} 
+                <MaterialCommunityIcons
+                    name={iconName}
+                    size={24}
+                    color={isPositive ? '#4CAF50' : Colors.black}
                 />
             </View>
             <View style={styles.transactionDetails}>
@@ -57,7 +58,7 @@ export default function WalletScreen() {
                 const token = await AsyncStorage.getItem('authToken');
                 if (!token) return;
 
-                const res = await fetch(`${API_URL}/passenger/wallet`, {
+                const res = await fetchWithRetry(`${API_URL}/passenger/wallet`, {
                     headers: {
                         Accept: 'application/json',
                         Authorization: `Bearer ${token}`,
@@ -88,7 +89,7 @@ export default function WalletScreen() {
                 const token = await AsyncStorage.getItem('authToken');
                 if (!token) return;
 
-                const res = await fetch(`${API_URL}/passenger/wallet/transactions`, {
+                const res = await fetchWithRetry(`${API_URL}/passenger/wallet/transactions`, {
                     headers: {
                         Accept: 'application/json',
                         Authorization: `Bearer ${token}`,
@@ -166,8 +167,8 @@ export default function WalletScreen() {
                                 </View>
                                 <Text style={styles.actionLabel}>Recharger</Text>
                             </TouchableOpacity>
-                           
-                           
+
+
                         </View>
 
                         {/* Titre de l'historique */}
@@ -206,7 +207,7 @@ const styles = StyleSheet.create({
         paddingHorizontal: 10,
         paddingVertical: 10,
         backgroundColor: 'white',
-        marginTop:30
+        marginTop: 30
     },
     backButton: {
         width: 44,
