@@ -1,6 +1,6 @@
 // screens/map/PickLocation.tsx
 import React, { useEffect, useRef, useState } from 'react';
-import { SafeAreaView, StyleSheet, Text, View, TouchableOpacity, TextInput, ActivityIndicator, Alert, Modal, KeyboardAvoidingView, Platform, Dimensions } from 'react-native';
+import { SafeAreaView, StyleSheet, Text, View, TouchableOpacity, TextInput, ActivityIndicator, Alert, Modal, KeyboardAvoidingView, Platform, Dimensions, Image } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming, interpolate } from 'react-native-reanimated';
 import { FlatList } from 'react-native-gesture-handler';
@@ -19,6 +19,11 @@ let Mapbox: any = null;
 let MapView: any = View;
 let Camera: any = View;
 let PointAnnotation: any = View;
+let MarkerView: any = View;
+let LocationPuck: any = null;
+let ShapeSource: any = null;
+let SymbolLayer: any = null;
+let MBImages: any = null;
 
 try {
   const MB = require('@rnmapbox/maps');
@@ -26,6 +31,11 @@ try {
   MapView = MB.MapView;
   Camera = MB.Camera;
   PointAnnotation = MB.PointAnnotation;
+  MarkerView = MB.MarkerView;
+  LocationPuck = MB.LocationPuck;
+  ShapeSource = MB.ShapeSource;
+  SymbolLayer = MB.SymbolLayer;
+  MBImages = MB.Images;
 
   if (Mapbox) {
     Mapbox.setAccessToken(process.env.EXPO_PUBLIC_MAPBOX_TOKEN || '');
@@ -104,9 +114,19 @@ const UserLocationMarker = () => {
   return (
     <View style={styles.originMarkerContainer}>
       <Animated.View style={[styles.pulseRing, pulseStyle]} />
-      <View style={styles.originMarkerIconContainer}>
-        <MaterialCommunityIcons name="map-marker" size={36} color="#E53935" />
-      </View>
+      <View style={{
+        width: 20,
+        height: 20,
+        borderRadius: 10,
+        backgroundColor: '#4285F4',
+        borderWidth: 3,
+        borderColor: '#FFFFFF',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.3,
+        shadowRadius: 3,
+        elevation: 4,
+      }} />
     </View>
   );
 };
@@ -378,32 +398,47 @@ export default function PickLocationScreen() {
               animationMode="flyTo"
               animationDuration={2000}
             />
-            {origin && (
-              <PointAnnotation id="origin" coordinate={[origin.lon, origin.lat]}>
-                <View style={styles.markerWrapper}>
-                  {/* Tooltip */}
-                  <View style={styles.tooltip}>
-                    <Text style={styles.tooltipText} numberOfLines={2}>
-                      {origin.address}
-                    </Text>
-                    <View style={styles.tooltipArrow} />
-                  </View>
-                  <UserLocationMarker />
-                </View>
-              </PointAnnotation>
+            {LocationPuck && (
+              <LocationPuck
+                puckBearingEnabled
+                puckBearing="heading"
+                pulsing={{
+                  isEnabled: true,
+                  color: '#4285F4',
+                  radius: 70,
+                }}
+              />
             )}
 
-            {nearbyDrivers.map((driver) => (
-              <PointAnnotation
-                key={driver.id}
-                id={`driver-${driver.id}`}
-                coordinate={[Number(driver.lng), Number(driver.lat)]}
-              >
-                <View style={styles.nearbyDriverMarker}>
-                  <MaterialCommunityIcons name="car-side" size={16} color={Colors.black} />
-                </View>
-              </PointAnnotation>
-            ))}
+            {ShapeSource && nearbyDrivers.length > 0 && (
+              <>
+                <MBImages images={{ carTop: require('../../../assets/images/car_top.png') }} />
+                <ShapeSource
+                  id="nearbyDrivers"
+                  shape={{
+                    type: 'FeatureCollection',
+                    features: nearbyDrivers.map((driver: any) => ({
+                      type: 'Feature',
+                      geometry: {
+                        type: 'Point',
+                        coordinates: [Number(driver.lng), Number(driver.lat)],
+                      },
+                      properties: { id: driver.id },
+                    })),
+                  }}
+                >
+                  <SymbolLayer
+                    id="nearbyDriversLayer"
+                    style={{
+                      iconImage: 'carTop',
+                      iconSize: 0.08,
+                      iconAllowOverlap: true,
+                      iconIgnorePlacement: true,
+                    }}
+                  />
+                </ShapeSource>
+              </>
+            )}
           </MapView>
         ) : (
           <View style={[StyleSheet.absoluteFill, { backgroundColor: '#e5e7eb', justifyContent: 'center', alignItems: 'center' }]}>
@@ -770,16 +805,27 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
   },
   nearbyDriverMarker: {
-    padding: 3,
-    backgroundColor: 'white',
-    borderRadius: 10,
-    borderWidth: 1.5,
-    borderColor: '#eee',
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  nearbyDriverCar: {
+    width: 32,
+    height: 32,
+  },
+  nearbyDriverInner: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#1565C0',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2.5,
+    borderColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
   },
   originMarkerInner: {
     width: 16,
@@ -805,7 +851,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: 'rgba(16, 185, 129, 0.3)',
+    backgroundColor: 'rgba(66, 133, 244, 0.3)',
   },
   originMarkerIconContainer: {
     justifyContent: 'center',

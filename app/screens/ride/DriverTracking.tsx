@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, Linking } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, Linking, Image } from 'react-native';
 import { useNavigation, useRouter } from 'expo-router';
 import { useRoute, type RouteProp } from '@react-navigation/native';
 import { MapPlaceholder } from '../../components/MapPlaceholder';
@@ -55,6 +55,13 @@ type RouteParams = {
     driver?: {
       name?: string;
       phone?: string;
+      photo?: string;
+      vehicle?: {
+        make?: string;
+        model?: string;
+        color?: string;
+        license_plate?: string;
+      };
     };
   } | undefined;
 };
@@ -155,7 +162,7 @@ export default function DriverTracking() {
   const { origin, destination, setOrigin: setOriginStore, setDestination: setDestinationStore } = useLocationStore();
   const vehicleNameParam = route.params?.vehicleName;
   const rideId = route.params?.rideId;
-  const initialDriver = route.params?.driver as { name?: string; phone?: string } | undefined;
+  const initialDriver = route.params?.driver;
   const { method, paymentStatus } = usePaymentStore();
   const { token } = useAuth();
 
@@ -181,6 +188,8 @@ export default function DriverTracking() {
   const [distanceKm, setDistanceKm] = React.useState<number | null>(null);
   const [driverName, setDriverName] = React.useState<string | undefined>(initialDriver?.name);
   const [driverPhone, setDriverPhone] = React.useState<string | undefined>(initialDriver?.phone);
+  const [driverPhoto, setDriverPhoto] = React.useState<string | undefined>(initialDriver?.photo);
+  const [vehicleInfo, setVehicleInfo] = React.useState<{ make?: string; model?: string; color?: string; license_plate?: string } | undefined>(initialDriver?.vehicle);
   const [rideStatus, setRideStatus] = React.useState<string | undefined>(undefined);
   const [cancelling, setCancelling] = React.useState(false);
   const [isOnline, setIsOnline] = React.useState(true);
@@ -283,6 +292,10 @@ export default function DriverTracking() {
         if (json?.driver) {
           setDriverName(json.driver.name);
           setDriverPhone(json.driver.phone);
+          setDriverPhoto(json.driver.photo);
+          if (json.driver.vehicle) {
+            setVehicleInfo(json.driver.vehicle);
+          }
         }
         if (json?.status) {
           setRideStatus(json.status);
@@ -635,49 +648,72 @@ export default function DriverTracking() {
       )}
 
       {isOnline && (
-        <View style={[styles.statusBadge, isPolling ? styles.pollingBadge : styles.liveBadge]}>
-          <View style={[styles.pulseCircle, isPolling ? styles.pollingCircle : styles.liveCircle]} />
-          <Text style={styles.statusText}>{isPolling ? 'Mise à jour (API)...' : 'Temps réel'}</Text>
+        <View style={styles.glassPill}>
+          <View style={[styles.statusDot, isPolling ? styles.pollingDot : styles.liveDot]} />
+          <Text style={styles.pillText}>
+            {isPolling ? 'Actualisation...' : 'Chauffeur en ligne'}
+          </Text>
         </View>
       )}
 
       {/* Bottom sheet */}
-      <View style={styles.sheet}>
-        <Text style={styles.sheetTitle}>Chauffeur en approche</Text>
-        <Text style={styles.sheetSub}>
-          {etaMin ? (
-            <>
-              Arrivée estimée dans <Text style={{ color: Colors.primary }}>{etaMin} min</Text>
-              {distanceKm !== null && ` (${distanceKm.toFixed(1)} km)`}
-            </>
-          ) : (
-            "Localisation en cours..."
+      <View style={styles.premiumSheet}>
+        <View style={styles.dragHandle} />
+
+        <View style={styles.etaContainer}>
+          <Text style={styles.etaLabel}>Arrivée estimée</Text>
+          <Text style={styles.etaValue}>
+            {etaMin ? `${etaMin} min` : '--'}
+          </Text>
+          {distanceKm !== null && (
+            <Text style={styles.distanceLabel}>{distanceKm.toFixed(1)} km</Text>
           )}
-        </Text>
+        </View>
 
         {rideStatus === 'arrived' && arrivedAt && (
           <WaitTimer arrivedAt={arrivedAt} />
         )}
 
-        <TouchableOpacity style={styles.driverCard} activeOpacity={0.8} onPress={() => navigation.navigate('screens/ride/ContactDriver' as never)}>
-          <View style={styles.avatar}>
-            <Ionicons name="person" size={20} color={Colors.white} />
+        <View style={styles.driverSection}>
+          <View style={styles.profileContainer}>
+            {driverPhoto ? (
+              <Image source={{ uri: driverPhoto }} style={styles.driverPhoto} />
+            ) : (
+              <View style={styles.avatarPlaceholder}>
+                <Ionicons name="person" size={30} color={Colors.gray} />
+              </View>
+            )}
+            <View style={styles.ratingBadge}>
+              <Ionicons name="star" size={10} color="#EAB308" />
+              <Text style={styles.ratingText}>4.9</Text>
+            </View>
           </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.driverName}>{driverName || 'Chauffeur assigné'}</Text>
-            <Text style={styles.driverCar}>{driverPhone || 'Numéro indisponible'}</Text>
-          </View>
-          <TouchableOpacity style={styles.iconBtn} onPress={() => handleCall(driverPhone)}>
-            <Ionicons name="call" size={18} color={Colors.black} />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.iconBtn} onPress={() => handleWhatsApp(driverPhone)}>
-            <Ionicons name="logo-whatsapp" size={18} color={Colors.black} />
-          </TouchableOpacity>
-        </TouchableOpacity>
 
-        <View style={{ marginTop: 6 }}>
-          <Text style={styles.label}>Point de prise en charge</Text>
-          <Text style={styles.value} numberOfLines={2}>{pickupAddress || origin?.address || 'Chargement...'}</Text>
+          <View style={styles.driverDetails}>
+            <Text style={styles.driverNameText}>{driverName || 'Chauffeur'}</Text>
+            <Text style={styles.vehicleText}>
+              {vehicleInfo ? `${vehicleInfo.make} ${vehicleInfo.model} • ${vehicleInfo.color}` : 'Véhicule en route'}
+            </Text>
+            <Text style={styles.plateText}>{vehicleInfo?.license_plate || '---'}</Text>
+          </View>
+
+          <View style={styles.actionButtons}>
+            <TouchableOpacity style={[styles.actionBtn, styles.callBtn]} onPress={() => handleCall(driverPhone)}>
+              <Ionicons name="call" size={20} color={Colors.white} />
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.actionBtn, styles.waBtn]} onPress={() => handleWhatsApp(driverPhone)}>
+              <Ionicons name="logo-whatsapp" size={20} color={Colors.white} />
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        <View style={styles.addressSection}>
+          <View style={styles.addressLine}>
+            <View style={styles.dot} />
+            <Text style={styles.addressValue} numberOfLines={1}>
+              {pickupAddress || origin?.address || 'Chargement...'}
+            </Text>
+          </View>
         </View>
 
         {/* Paiement sélectionné et statut */}
@@ -744,56 +780,203 @@ const styles = StyleSheet.create({
     marginLeft: 6,
     fontFamily: Fonts.titilliumWebBold,
   },
-  sheet: { position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: Colors.white, borderTopLeftRadius: 16, borderTopRightRadius: 16, paddingHorizontal: 16, paddingTop: 20, paddingBottom: 40 },
-  sheetTitle: { fontFamily: Fonts.titilliumWebBold, fontSize: 18, color: Colors.black },
-  sheetSub: { fontFamily: Fonts.titilliumWeb, color: Colors.gray, marginBottom: 12 },
-  driverCard: { backgroundColor: Colors.background, borderRadius: 12, padding: 12, flexDirection: 'row', alignItems: 'center' },
-  avatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: Colors.primary, alignItems: 'center', justifyContent: 'center', marginRight: 10 },
-  driverName: { fontFamily: Fonts.titilliumWebBold, color: Colors.black },
-  driverCar: { fontFamily: Fonts.titilliumWeb, color: Colors.gray },
-  iconBtn: { width: 36, height: 36, borderRadius: 8, backgroundColor: Colors.white, alignItems: 'center', justifyContent: 'center', marginLeft: 8 },
-  label: { fontFamily: Fonts.titilliumWeb, color: Colors.gray },
-  value: { fontFamily: Fonts.titilliumWebBold, color: Colors.black },
-  paymentRow: { flexDirection: 'row', alignItems: 'center', marginTop: 10 },
-  statusPill: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.primary, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999 },
-  statusPillText: { color: Colors.white, fontFamily: Fonts.titilliumWebBold, marginLeft: 6 },
-  payBtn: { marginTop: 14, backgroundColor: Colors.primary, borderRadius: 12, alignItems: 'center', paddingVertical: 14 },
-  payBtnDisabled: { backgroundColor: Colors.lightGray },
-  payText: { color: Colors.white, fontFamily: Fonts.titilliumWebBold },
-  cancelBtn: { marginTop: 12, backgroundColor: '#f97316', borderRadius: 12, alignItems: 'center', paddingVertical: 12, marginBottom: 4 },
-  cancelText: { color: Colors.white, fontFamily: Fonts.titilliumWebBold },
-  backOverlay: { position: 'absolute', top: 24, left: 16, width: 40, height: 40, borderRadius: 20, backgroundColor: Colors.white, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2, elevation: 2 },
-  markerContainer: { padding: 4, backgroundColor: 'white', borderRadius: 20, elevation: 5 },
-  statusBadge: {
+  glassPill: {
     position: 'absolute',
-    top: 50,
+    top: 60,
     right: 20,
-    zIndex: 1000,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
     elevation: 5,
+    zIndex: 100,
   },
-  liveBadge: { backgroundColor: 'rgba(34, 197, 94, 0.9)' },
-  pollingBadge: { backgroundColor: 'rgba(245, 158, 11, 0.9)' },
-  statusText: {
-    color: Colors.white,
-    fontSize: 11,
-    fontWeight: '600',
-    marginLeft: 6,
-    fontFamily: Fonts.titilliumWebBold,
-  },
-  pulseCircle: {
+  statusDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
+    marginRight: 8,
   },
-  liveCircle: { backgroundColor: '#bef264' },
-  pollingCircle: { backgroundColor: '#fef3c7' },
+  liveDot: { backgroundColor: '#22C55E' },
+  pollingDot: { backgroundColor: '#F59E0B' },
+  pillText: {
+    fontSize: 12,
+    fontFamily: Fonts.titilliumWebBold,
+    color: Colors.black,
+  },
+  premiumSheet: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: Colors.white,
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
+    paddingHorizontal: 24,
+    paddingTop: 12,
+    paddingBottom: 34,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -10 },
+    shadowOpacity: 0.05,
+    shadowRadius: 15,
+    elevation: 20,
+  },
+  dragHandle: {
+    width: 40,
+    height: 4,
+    backgroundColor: '#E2E8F0',
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginBottom: 20,
+  },
+  etaContainer: {
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  etaLabel: {
+    fontSize: 12,
+    color: Colors.gray,
+    fontFamily: Fonts.titilliumWeb,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  etaValue: {
+    fontSize: 32,
+    fontFamily: Fonts.titilliumWebBold,
+    color: Colors.primary,
+  },
+  distanceLabel: {
+    fontSize: 14,
+    color: Colors.gray,
+    fontFamily: Fonts.titilliumWeb,
+    marginTop: -4,
+  },
+  driverSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 24,
+    padding: 16,
+    marginBottom: 20,
+  },
+  profileContainer: {
+    position: 'relative',
+  },
+  driverPhoto: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#E2E8F0',
+  },
+  avatarPlaceholder: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#E2E8F0',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  ratingBadge: {
+    position: 'absolute',
+    bottom: -4,
+    right: -4,
+    backgroundColor: Colors.white,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  ratingText: {
+    fontSize: 10,
+    fontFamily: Fonts.titilliumWebBold,
+    color: Colors.black,
+    marginLeft: 2,
+  },
+  driverDetails: {
+    flex: 1,
+    marginLeft: 16,
+  },
+  driverNameText: {
+    fontSize: 18,
+    fontFamily: Fonts.titilliumWebBold,
+    color: Colors.black,
+  },
+  vehicleText: {
+    fontSize: 12,
+    fontFamily: Fonts.titilliumWeb,
+    color: Colors.gray,
+    marginTop: 2,
+  },
+  plateText: {
+    fontSize: 12,
+    fontFamily: Fonts.titilliumWebBold,
+    color: Colors.primary,
+    marginTop: 2,
+  },
+  actionButtons: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  actionBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+  },
+  callBtn: { backgroundColor: Colors.primary },
+  waBtn: { backgroundColor: '#22C55E' },
+  addressSection: {
+    marginBottom: 24,
+  },
+  addressLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F1F5F9',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 16,
+  },
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#F59E0B',
+    marginRight: 12,
+  },
+  addressValue: {
+    flex: 1,
+    fontSize: 14,
+    fontFamily: Fonts.titilliumWeb,
+    color: Colors.black,
+  },
+  label: { fontFamily: Fonts.titilliumWeb, color: Colors.gray },
+  value: { fontFamily: Fonts.titilliumWebBold, color: Colors.black },
+  paymentRow: { flexDirection: 'row', alignItems: 'center', marginTop: -4, marginBottom: 16 },
+  statusPill: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.primary, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999 },
+  statusPillText: { color: Colors.white, fontFamily: Fonts.titilliumWebBold, marginLeft: 6 },
+  payBtn: { marginTop: 14, backgroundColor: Colors.primary, borderRadius: 12, alignItems: 'center', paddingVertical: 14 },
+  payBtnDisabled: { backgroundColor: '#CBD5E1' },
+  payText: { color: Colors.white, fontFamily: Fonts.titilliumWebBold },
+  cancelBtn: { backgroundColor: '#F1F5F9', borderRadius: 16, alignItems: 'center', paddingVertical: 16 },
+  cancelText: { color: '#64748B', fontFamily: Fonts.titilliumWebBold, fontSize: 14 },
+  backOverlay: { position: 'absolute', top: 56, left: 16, width: 44, height: 44, borderRadius: 22, backgroundColor: Colors.white, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 8, elevation: 5, zIndex: 100 },
+  markerContainer: { padding: 4, backgroundColor: 'white', borderRadius: 20, elevation: 5 },
 });

@@ -1,5 +1,5 @@
 // screens/map/MapPicker.tsx
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { StyleSheet, Text, View, TouchableOpacity, ActivityIndicator, Dimensions, TextInput, Animated, PanResponder, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -10,6 +10,7 @@ let Mapbox: any = null;
 let MapView: any = View;
 let Camera: any = View;
 let PointAnnotation: any = View;
+let LocationPuck: any = null;
 
 try {
   const MB = require('@rnmapbox/maps');
@@ -17,6 +18,7 @@ try {
   MapView = MB.MapView;
   Camera = MB.Camera;
   PointAnnotation = MB.PointAnnotation;
+  LocationPuck = MB.LocationPuck;
 
   if (Mapbox && typeof Mapbox.setAccessToken === 'function') {
     Mapbox.setAccessToken(process.env.EXPO_PUBLIC_MAPBOX_TOKEN || '');
@@ -67,6 +69,31 @@ export default function MapPickerScreen() {
   const sheetTranslateY = useRef(new Animated.Value(0)).current;
   const SHEET_PEEK_HEIGHT = 240;
   const { height: SCREEN_HEIGHT } = Dimensions.get('window');
+
+  // Pin bounce animation
+  const pinBounceAnim = useRef(new Animated.Value(0)).current;
+  const pinShadowAnim = useRef(new Animated.Value(0.4)).current;
+  const pinShadowScaleAnim = useRef(new Animated.Value(3)).current;
+  useEffect(() => {
+    const bounce = Animated.loop(
+      Animated.parallel([
+        Animated.sequence([
+          Animated.timing(pinBounceAnim, { toValue: -6, duration: 1200, useNativeDriver: true }),
+          Animated.timing(pinBounceAnim, { toValue: 0, duration: 1200, useNativeDriver: true }),
+        ]),
+        Animated.sequence([
+          Animated.timing(pinShadowAnim, { toValue: 0.2, duration: 1200, useNativeDriver: true }),
+          Animated.timing(pinShadowAnim, { toValue: 0.4, duration: 1200, useNativeDriver: true }),
+        ]),
+        Animated.sequence([
+          Animated.timing(pinShadowScaleAnim, { toValue: 4, duration: 1200, useNativeDriver: true }),
+          Animated.timing(pinShadowScaleAnim, { toValue: 3, duration: 1200, useNativeDriver: true }),
+        ]),
+      ])
+    );
+    bounce.start();
+    return () => bounce.stop();
+  }, []);
 
   const sheetPanResponder = useRef(
     PanResponder.create({
@@ -162,6 +189,17 @@ export default function MapPickerScreen() {
                 zoomLevel: 15,
               }}
             />
+            {LocationPuck && (
+              <LocationPuck
+                puckBearingEnabled
+                puckBearing="heading"
+                pulsing={{
+                  isEnabled: true,
+                  color: '#4285F4',
+                  radius: 70,
+                }}
+              />
+            )}
           </MapView>
         ) : (
           <MapPlaceholder style={StyleSheet.absoluteFill} />
@@ -201,8 +239,10 @@ export default function MapPickerScreen() {
               <Text style={styles.selectionTooltipText}>{revLoading ? 'Chargement...' : 'Position choisie'}</Text>
               <View style={styles.selectionTooltipArrow} />
             </View>
-            <MaterialCommunityIcons name="map-marker" size={52} color="#E53935" style={styles.pinIcon} />
-            <View style={styles.pinShadow} />
+            <Animated.View style={{ transform: [{ translateY: pinBounceAnim }] }}>
+              <MaterialCommunityIcons name="map-marker" size={52} color="#E53935" style={styles.pinIcon} />
+            </Animated.View>
+            <Animated.View style={[styles.pinShadow, { opacity: pinShadowAnim, transform: [{ scaleX: pinShadowScaleAnim }] }]} />
           </View>
         </View>
       </View>
@@ -321,7 +361,6 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     backgroundColor: 'rgba(0,0,0,0.3)',
     marginTop: -4,
-    transform: [{ scaleX: 3 }],
   },
   selectionTooltip: {
     backgroundColor: Colors.black,

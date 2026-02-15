@@ -4,6 +4,7 @@ import { useNavigation, useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming, withSequence, Easing } from 'react-native-reanimated';
 
 import { Colors } from '../theme';
 import { Fonts } from '../font';
@@ -38,7 +39,26 @@ export default function HomeTab() {
   const [walletBalance, setWalletBalance] = useState<number>(0);
   const [userName, setUserName] = useState<string>('');
   const [activeRide, setActiveRide] = useState<ActiveRide | null>(null);
+  const dismissedCompletedRideRef = React.useRef<string | null>(null);
   const API_URL = process.env.EXPO_PUBLIC_API_URL;
+
+  // Wallet icon pulse animation
+  const walletIconScale = useSharedValue(1);
+  useEffect(() => {
+    walletIconScale.value = withRepeat(
+      withSequence(
+        withTiming(1.18, { duration: 1500, easing: Easing.inOut(Easing.ease) }),
+        withTiming(1, { duration: 1500, easing: Easing.inOut(Easing.ease) })
+      ),
+      -1,
+      false
+    );
+  }, []);
+  const walletIconStyle = useAnimatedStyle(() => ({
+    marginRight: 6,
+    transform: [{ scale: walletIconScale.value }],
+    opacity: 0.7 + walletIconScale.value * 0.15,
+  }));
 
   // 1. Session Protection, User Data & Wallet Balance
   useEffect(() => {
@@ -108,6 +128,11 @@ export default function HomeTab() {
           const ride = await res.json();
 
           if (ride && ride.id) {
+            // Skip completed rides that were already dismissed
+            if (ride.status === 'completed' && dismissedCompletedRideRef.current === String(ride.id)) {
+              setActiveRide(null);
+              return;
+            }
             setActiveRide(ride);
           } else {
             setActiveRide(null);
@@ -143,6 +168,8 @@ export default function HomeTab() {
         }
       });
     } else if (activeRide.status === 'completed') {
+      // Mark this completed ride as dismissed so we don't loop
+      dismissedCompletedRideRef.current = String(activeRide.id);
       router.push({
         pathname: '/screens/ride/RideReceipt',
         params: {
@@ -215,14 +242,21 @@ export default function HomeTab() {
 
         {/* WALLET CARD - PREMIUM DESIGN */}
         <LinearGradient
-          colors={[Colors.primary, '#4c66e8']}
+          colors={['#1a3a8a', '#2d5dd9', '#4c7cf5']}
           start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
+          end={{ x: 1, y: 1 }}
           style={styles.walletCard}
         >
+          {/* Decorative blurred coins */}
+          <View style={styles.coinDecor1} />
+          <View style={styles.coinDecor2} />
+          <View style={styles.coinDecor3} />
+
           <View style={styles.walletInfo}>
             <View style={styles.walletRow}>
-              <Ionicons name="wallet-outline" size={18} color="rgba(255,255,255,0.7)" style={{ marginRight: 6 }} />
+              <Animated.View style={walletIconStyle}>
+                <Ionicons name="wallet-outline" size={18} color="rgba(255,255,255,0.85)" />
+              </Animated.View>
               <Text style={styles.walletLabel}>Solde TIC Wallet</Text>
             </View>
             <Text style={styles.walletBalance}>{walletBalance.toLocaleString('fr-FR')} FCFA</Text>
@@ -232,7 +266,7 @@ export default function HomeTab() {
             onPress={() => navigation.navigate('screens/wallet/AddFunds' as never)}
           >
             <Text style={styles.addFundsText}>Recharger</Text>
-            <Ionicons name="chevron-forward" size={16} color={Colors.primary} />
+            <Ionicons name="chevron-forward" size={16} color="#1a3a8a" />
           </TouchableOpacity>
         </LinearGradient>
 
@@ -240,6 +274,31 @@ export default function HomeTab() {
         <View style={styles.selectorContainer}>
           <HomeServiceSelector activeService={selectedService} onChange={setSelectedService} />
         </View>
+
+        {/* ACTIVE RIDE BANNER - inline */}
+        {activeRide && (
+          <TouchableOpacity
+            style={styles.activeRideBanner}
+            onPress={handleReturnToRide}
+            activeOpacity={0.9}
+          >
+            <LinearGradient
+              colors={['#FF6B35', '#F7931E']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.activeRideBannerGradient}
+            >
+              <View style={styles.activeRideBannerContent}>
+                <View style={styles.activeRidePulse} />
+                <View style={styles.activeRideInfo}>
+                  <Text style={styles.activeRideLabel}>{getActiveRideLabel()}</Text>
+                  <Text style={styles.activeRideAction}>Appuyez pour retourner à votre course</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={24} color="#fff" />
+              </View>
+            </LinearGradient>
+          </TouchableOpacity>
+        )}
 
         {/* DYNAMIC CONTENT SECTION */}
         <View style={styles.sectionContainer}>
@@ -249,30 +308,6 @@ export default function HomeTab() {
         <View style={{ height: 100 }} />
       </ScrollView>
 
-      {/* ACTIVE RIDE BANNER */}
-      {activeRide && (
-        <TouchableOpacity
-          style={styles.activeRideBanner}
-          onPress={handleReturnToRide}
-          activeOpacity={0.9}
-        >
-          <LinearGradient
-            colors={['#FF6B35', '#F7931E']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={styles.activeRideBannerGradient}
-          >
-            <View style={styles.activeRideBannerContent}>
-              <View style={styles.activeRidePulse} />
-              <View style={styles.activeRideInfo}>
-                <Text style={styles.activeRideLabel}>{getActiveRideLabel()}</Text>
-                <Text style={styles.activeRideAction}>Appuyez pour retourner à votre course</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={24} color="#fff" />
-            </View>
-          </LinearGradient>
-        </TouchableOpacity>
-      )}
 
     </SafeAreaView>
   );
@@ -328,17 +363,51 @@ const styles = StyleSheet.create({
   },
 
   walletCard: {
-    borderRadius: 12,
+    borderRadius: 16,
     padding: 20,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 6,
-    elevation: 2
+    overflow: 'hidden',
+    shadowColor: '#1a3a8a',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    elevation: 6
+  },
+  coinDecor1: {
+    position: 'absolute',
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.08)',
+    top: -20,
+    right: -10,
+  },
+  coinDecor2: {
+    position: 'absolute',
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.07)',
+    bottom: -15,
+    right: 60,
+  },
+  coinDecor3: {
+    position: 'absolute',
+    width: 35,
+    height: 35,
+    borderRadius: 17.5,
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
+    top: 5,
+    right: 100,
   },
   walletInfo: { flex: 1 },
   walletRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 4 },
@@ -382,10 +451,7 @@ const styles = StyleSheet.create({
 
   // Active Ride Banner Styles
   activeRideBanner: {
-    position: 'absolute',
-    bottom: 90,
-    left: 20,
-    right: 20,
+    marginBottom: 16,
     borderRadius: 12,
     shadowColor: '#FF6B35',
     shadowOffset: { width: 0, height: 4 },
