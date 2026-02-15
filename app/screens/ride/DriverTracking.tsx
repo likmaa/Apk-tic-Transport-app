@@ -1,4 +1,4 @@
-import React from 'react';
+import * as React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert, Linking, Image } from 'react-native';
 import { useNavigation, useRouter } from 'expo-router';
 import { useRoute, type RouteProp } from '@react-navigation/native';
@@ -260,6 +260,12 @@ export default function DriverTracking() {
     if ((initialDriver as any).rating_average) {
       setRatingAverage((initialDriver as any).rating_average);
     }
+    if ((initialDriver as any).lat && (initialDriver as any).lng) {
+      setDriverPos({
+        latitude: Number((initialDriver as any).lat),
+        longitude: Number((initialDriver as any).lng),
+      });
+    }
   }, [initialDriver]);
 
   // Charger les infos de la course
@@ -278,26 +284,28 @@ export default function DriverTracking() {
         if (!res.ok) return;
         const json = await res.json();
 
-        if (json?.pickup_address) {
-          setPickupAddress(json.pickup_address);
-          if (json.pickup_lat && json.pickup_lng) {
-            const pPos = { latitude: Number(json.pickup_lat), longitude: Number(json.pickup_lng) };
+        const pickup = json.pickup || {};
+        const dropoff = json.dropoff || {};
+
+        if (pickup.address) {
+          setPickupAddress(pickup.address);
+          if (pickup.lat && pickup.lng) {
+            const pPos = { latitude: Number(pickup.lat), longitude: Number(pickup.lng) };
             setPickupPos(pPos);
-            // Recovery: fill global store if empty
             if (!origin) {
-              setOriginStore({ address: json.pickup_address, lat: pPos.latitude, lon: pPos.longitude });
+              setOriginStore({ address: pickup.address, lat: pPos.latitude, lon: pPos.longitude });
             }
           }
         } else if (origin) {
           setPickupPos({ latitude: origin.lat, longitude: origin.lon });
+          setPickupAddress(origin.address);
         }
 
-        if (json?.dropoff_lat && json?.dropoff_lng) {
-          const dPos = { latitude: Number(json.dropoff_lat), longitude: Number(json.dropoff_lng) };
+        if (dropoff.lat && dropoff.lng) {
+          const dPos = { latitude: Number(dropoff.lat), longitude: Number(dropoff.lng) };
           setDestinationPos(dPos);
-          // Recovery: fill global store if empty
           if (!destination) {
-            setDestinationStore({ address: json.dropoff_address || 'Destination', lat: dPos.latitude, lon: dPos.longitude });
+            setDestinationStore({ address: dropoff.address || 'Destination', lat: dPos.latitude, lon: dPos.longitude });
           }
         }
         if (json?.driver) {
@@ -311,6 +319,12 @@ export default function DriverTracking() {
           }
           if (json.driver.rating_average !== undefined) {
             setRatingAverage(json.driver.rating_average);
+          }
+          if (json.driver.lat && json.driver.lng) {
+            setDriverPos({
+              latitude: Number(json.driver.lat),
+              longitude: Number(json.driver.lng),
+            });
           }
         }
         if (json?.status) {
@@ -358,6 +372,9 @@ export default function DriverTracking() {
             const json = await res.json().catch(() => null);
             if (json?.status && !cancelled) {
               setRideStatus(json.status);
+              if (json.arrived_at) {
+                setArrivedAt(json.arrived_at);
+              }
               lastWebSocketEvent = Date.now();
             }
           }
@@ -432,6 +449,8 @@ export default function DriverTracking() {
               }
 
               if (data.status === 'completed') {
+                const p = data.pickup || {};
+                const d = data.dropoff || {};
                 navigation.navigate({
                   name: 'screens/ride/RideReceipt',
                   params: {
@@ -441,10 +460,10 @@ export default function DriverTracking() {
                     vehicleName: vehicleNameParam || 'Véhicule',
                     paymentMethod: data.payment_method || method,
                     breakdown: data.breakdown,
-                    pickupLat: data.pickup_lat,
-                    pickupLng: data.pickup_lng,
-                    dropoffLat: data.dropoff_lat,
-                    dropoffLng: data.dropoff_lng,
+                    pickupLat: p.lat,
+                    pickupLng: p.lng,
+                    dropoffLat: d.lat,
+                    dropoffLng: d.lng,
                   }
                 } as never);
                 return;
@@ -555,6 +574,7 @@ export default function DriverTracking() {
           if (payload.arrived_at) {
             setArrivedAt(payload.arrived_at);
           }
+          console.log('Driver arrived event received', payload);
           Alert.alert('Chauffeur arrivé', 'Votre chauffeur est arrivé au point de prise en charge.');
         });
       } catch (error) {
@@ -570,13 +590,27 @@ export default function DriverTracking() {
     };
   }, [rideId]);
 
-  // Mettre à jour le tracé et l'ETA
   React.useEffect(() => {
-    if (driverPos && pickupPos) {
-      setRouteCoords([driverPos, pickupPos]);
-      const dist = haversineDistanceKm(driverPos, pickupPos);
+    const lat1 = driverPos?.latitude;
+    const lon1 = driverPos?.longitude;
+    const lat2 = pickupPos?.latitude;
+    const lon2 = pickupPos?.longitude;
+
+    if (Number.isFinite(lat1) && Number.isFinite(lon1) &&
+      Number.isFinite(lat2) && Number.isFinite(lon2)) {
+
+      setRouteCoords([
+        { latitude: lat1!, longitude: lon1! },
+        { latitude: lat2!, longitude: lon2! }
+      ]);
+
+      const dist = haversineDistanceKm(
+        { latitude: lat1!, longitude: lon1! },
+        { latitude: lat2!, longitude: lon2! }
+      );
+
       setDistanceKm(dist);
-      // Supposons 25 km/h de moyenne en milieu urbain
+      // Average 25 km/h in urban area
       const etaMinutes = Math.max(1, Math.round((dist / 25) * 60));
       setEtaMin(etaMinutes);
     } else {
@@ -679,7 +713,7 @@ export default function DriverTracking() {
         <View style={styles.etaContainer}>
           <Text style={styles.etaLabel}>Arrivée estimée</Text>
           <Text style={styles.etaValue}>
-            {etaMin ? `${etaMin} min` : '--'}
+            {etaMin !== null ? `${etaMin} min` : 'Calcul...'}
           </Text>
           {distanceKm !== null && (
             <Text style={styles.distanceLabel}>{distanceKm.toFixed(1)} km</Text>
@@ -690,35 +724,44 @@ export default function DriverTracking() {
           <WaitTimer arrivedAt={arrivedAt} />
         )}
 
-        <View style={styles.driverSection}>
-          <View style={styles.profileContainer}>
-            {driverPhoto ? (
-              <Image source={{ uri: driverPhoto }} style={styles.driverPhoto} />
-            ) : (
-              <View style={styles.avatarPlaceholder}>
-                <Ionicons name="person" size={30} color={Colors.gray} />
+        <View style={styles.driverCard}>
+          <View style={styles.driverInfoPrimary}>
+            <View style={styles.profileContainer}>
+              {driverPhoto ? (
+                <Image source={{ uri: driverPhoto }} style={styles.driverPhoto} />
+              ) : (
+                <View style={styles.avatarPlaceholder}>
+                  <Ionicons name="person" size={30} color={Colors.gray} />
+                </View>
+              )}
+              <View style={styles.ratingBadge}>
+                <Ionicons name="star" size={10} color="#EAB308" />
+                <Text style={styles.ratingText}>{ratingAverage > 0 ? ratingAverage.toFixed(1) : 'New'}</Text>
               </View>
-            )}
-            <View style={styles.ratingBadge}>
-              <Ionicons name="star" size={10} color="#EAB308" />
-              <Text style={styles.ratingText}>{ratingAverage > 0 ? ratingAverage.toFixed(1) : 'New'}</Text>
+            </View>
+
+            <View style={styles.driverMainDetails}>
+              <Text style={styles.driverNameText}>{driverName || 'Chauffeur'}</Text>
+              <Text style={styles.vehicleText}>
+                {vehicleInfo ? `${vehicleInfo.make} ${vehicleInfo.model} • ${vehicleInfo.color}` : 'Véhicule en route'}
+              </Text>
+              <Text style={styles.plateText}>{vehicleInfo?.license_plate || '---'}</Text>
             </View>
           </View>
 
-          <View style={styles.driverDetails}>
-            <Text style={styles.driverNameText}>{driverName || 'Chauffeur'}</Text>
-            <Text style={styles.vehicleText}>
-              {vehicleInfo ? `${vehicleInfo.make} ${vehicleInfo.model} • ${vehicleInfo.color}` : 'Véhicule en route'}
-            </Text>
-            <Text style={styles.plateText}>{vehicleInfo?.license_plate || '---'}</Text>
-          </View>
+          <View style={styles.cardDivider} />
 
-          <View style={styles.actionButtons}>
-            <TouchableOpacity style={[styles.actionBtn, styles.callBtn]} onPress={() => handleCall(driverPhone)}>
-              <Ionicons name="call" size={20} color={Colors.white} />
+          <View style={styles.actionRow}>
+            <TouchableOpacity style={[styles.contactActionBtn, styles.callAction]} onPress={() => handleCall(driverPhone)}>
+              <Ionicons name="call" size={18} color={Colors.primary} />
+              <Text style={styles.contactActionText}>Appeler</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.actionBtn, styles.waBtn]} onPress={() => handleWhatsApp(driverPhone)}>
-              <Ionicons name="logo-whatsapp" size={20} color={Colors.white} />
+
+            <View style={styles.actionDivider} />
+
+            <TouchableOpacity style={[styles.contactActionBtn, styles.waAction]} onPress={() => handleWhatsApp(driverPhone)}>
+              <Ionicons name="logo-whatsapp" size={18} color="#22C55E" />
+              <Text style={styles.contactActionText}>Message</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -835,8 +878,8 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 32,
     borderTopRightRadius: 32,
     paddingHorizontal: 24,
-    paddingTop: 12,
-    paddingBottom: 34,
+    paddingTop: 8,
+    paddingBottom: 24,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -10 },
     shadowOpacity: 0.05,
@@ -849,51 +892,57 @@ const styles = StyleSheet.create({
     backgroundColor: '#E2E8F0',
     borderRadius: 2,
     alignSelf: 'center',
-    marginBottom: 20,
+    marginBottom: 10,
   },
   etaContainer: {
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: 12,
   },
   etaLabel: {
-    fontSize: 12,
+    fontSize: 11,
     color: Colors.gray,
     fontFamily: Fonts.titilliumWeb,
     textTransform: 'uppercase',
-    letterSpacing: 1,
+    letterSpacing: 0.5,
   },
   etaValue: {
-    fontSize: 32,
+    fontSize: 28,
     fontFamily: Fonts.titilliumWebBold,
     color: Colors.primary,
+    marginTop: -2,
   },
   distanceLabel: {
-    fontSize: 14,
+    fontSize: 13,
     color: Colors.gray,
     fontFamily: Fonts.titilliumWeb,
-    marginTop: -4,
+    marginTop: -6,
   },
-  driverSection: {
+  driverCard: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 20,
+    padding: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+  },
+  driverInfoPrimary: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F8FAFC',
-    borderRadius: 24,
-    padding: 16,
-    marginBottom: 20,
+    marginBottom: 8,
   },
   profileContainer: {
     position: 'relative',
   },
   driverPhoto: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+    width: 50,
+    height: 50,
+    borderRadius: 25,
     backgroundColor: '#E2E8F0',
   },
   avatarPlaceholder: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+    width: 50,
+    height: 50,
+    borderRadius: 25,
     backgroundColor: '#E2E8F0',
     alignItems: 'center',
     justifyContent: 'center',
@@ -905,9 +954,9 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.white,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 10,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 8,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
@@ -915,60 +964,72 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   ratingText: {
-    fontSize: 10,
+    fontSize: 9,
     fontFamily: Fonts.titilliumWebBold,
     color: Colors.black,
     marginLeft: 2,
   },
-  driverDetails: {
+  driverMainDetails: {
     flex: 1,
-    marginLeft: 16,
+    marginLeft: 12,
   },
   driverNameText: {
-    fontSize: 18,
+    fontSize: 16,
     fontFamily: Fonts.titilliumWebBold,
     color: Colors.black,
   },
   vehicleText: {
-    fontSize: 12,
+    fontSize: 11,
     fontFamily: Fonts.titilliumWeb,
     color: Colors.gray,
-    marginTop: 2,
+    marginTop: 1,
   },
   plateText: {
-    fontSize: 12,
+    fontSize: 11,
     fontFamily: Fonts.titilliumWebBold,
     color: Colors.primary,
-    marginTop: 2,
+    marginTop: 1,
   },
-  actionButtons: {
+  cardDivider: {
+    height: 1,
+    backgroundColor: '#F1F5F9',
+    marginVertical: 2,
+  },
+  actionRow: {
     flexDirection: 'row',
-    gap: 12,
+    alignItems: 'center',
+    marginTop: 4,
   },
-  actionBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+  contactActionBtn: {
+    flex: 1,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 6,
+    paddingVertical: 6,
+    gap: 6,
   },
-  callBtn: { backgroundColor: Colors.primary },
-  waBtn: { backgroundColor: '#22C55E' },
+  callAction: {},
+  waAction: {},
+  actionDivider: {
+    width: 1,
+    height: 16,
+    backgroundColor: '#E2E8F0',
+  },
+  contactActionText: {
+    fontSize: 13,
+    fontFamily: Fonts.titilliumWebBold,
+    color: Colors.black,
+  },
   addressSection: {
-    marginBottom: 24,
+    marginBottom: 16,
   },
   addressLine: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#F1F5F9',
-    paddingVertical: 12,
+    paddingVertical: 10,
     paddingHorizontal: 16,
-    borderRadius: 16,
+    borderRadius: 12,
   },
   dot: {
     width: 8,
