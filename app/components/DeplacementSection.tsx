@@ -32,7 +32,7 @@ export default function DeplacementSection() {
 
   const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
-  const isValid = !!origin && !!destination && !!selectedLineId && !!fromStopId && !!toStopId;
+  const isValid = origin != null && destination != null && selectedLineId != null && fromStopId != null && toStopId != null;
 
   const onSeePrice = async (): Promise<number | null> => {
     if (!selectedLineId || !fromStopId || !toStopId) return null;
@@ -51,13 +51,14 @@ export default function DeplacementSection() {
   };
 
   React.useEffect(() => {
-    console.log('[DEBUG] DeplacementSection - lines:', lines.length, 'stops:', stops.length);
-    if (lines.length > 0 && !selectedLineId) {
-      setSelectedLineId(lines[0].id);
+    if (lines.length > 0) {
+      if (!selectedLineId) {
+        setSelectedLineId(lines[0].id);
+      }
     }
-  }, [lines, selectedLineId]);
+  }, [lines, stops, selectedLineId]);
 
-  const selectedLine = lines.find(l => l.id === selectedLineId) || (lines.length > 0 ? lines[0] : undefined);
+  const selectedLine = lines.find(l => l.id === selectedLineId);
 
   // Fallback: if the selected line has no stops, we can show all available stops
   const lineStops = (selectedLine?.stops && selectedLine.stops.length > 0)
@@ -85,6 +86,70 @@ export default function DeplacementSection() {
     if (place) setShowEmbarkModal(false);
   };
 
+  const handleConfirm = async () => {
+    if (!isValid) {
+      let missing = [];
+      if (!origin) missing.push("Point d'embarquement");
+      if (!destination) missing.push("Point de débarquement");
+      if (!selectedLineId) missing.push("Ligne non sélectionnée");
+      if (!fromStopId) missing.push("Arrêt de départ non identifié");
+      if (!toStopId) missing.push("Arrêt d'arrivée non identifié");
+
+      Alert.alert("Champs manquants", "Veuillez compléter : " + missing.join(", "));
+      return;
+    }
+
+    const price = await onSeePrice();
+    if (!API_URL || !origin?.address || !destination?.address || price == null) {
+      Alert.alert('Erreur', "Impossible de calculer le tarif ou données de position manquantes.");
+      return;
+    }
+    try {
+      if (!token) {
+        Alert.alert('Erreur', "Vous devez être connecté.");
+        return;
+      }
+      const res = await fetch(`${API_URL}/trips/request`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          pickup_label: origin.address,
+          dropoff_label: destination.address,
+          price,
+          pickup_lat: origin.lat,
+          pickup_lng: origin.lon,
+          dropoff_lat: destination.lat,
+          dropoff_lng: destination.lon,
+        }),
+      });
+      const json = await res.json().catch(() => null);
+      if (!res.ok) {
+        if (json) {
+          const msg = json.message || json.error || 'Erreur inconnue du serveur.';
+          Alert.alert('Erreur Serveur', msg);
+        } else {
+          Alert.alert('Erreur', `Échec de la requête (Status ${res.status}). Le serveur n'a pas renvoyé de détails.`);
+        }
+        return;
+      }
+      if (!json) {
+        Alert.alert('Erreur', "Réponse du serveur vide ou malformée.");
+        return;
+      }
+      const rideId = json?.id;
+      if (rideId) {
+        router.push({ pathname: '/screens/ride/SearchingDriver', params: { rideId: String(rideId) } });
+      }
+    } catch (e) {
+      console.log('Erreur création déplacement', e);
+      Alert.alert('Erreur', "Une erreur est survenue lors de la création du déplacement.");
+    }
+  };
+
   return (
     <View style={styles.container}>
       <Text style={styles.sectionTitle}>Déplacement TIC</Text>
@@ -105,6 +170,8 @@ export default function DeplacementSection() {
                   setSelectedLineId(line.id);
                   setFromStopId(null);
                   setToStopId(null);
+                  setOrigin(null);
+                  setDestination(null);
                   setQuote(null);
                 }}
               >
@@ -197,47 +264,9 @@ export default function DeplacementSection() {
 
       <TouchableOpacity
         activeOpacity={0.8}
-        style={[styles.confirmButton, !isValid && { opacity: 0.6 }]}
-        disabled={!isValid || quoting}
-        onPress={async () => {
-          const price = await onSeePrice();
-          if (!API_URL || !origin?.address || !destination?.address || price == null) {
-            Alert.alert('Erreur', "Impossible de créer le déplacement (données incomplètes).");
-            return;
-          }
-          try {
-            if (!token) return;
-            const res = await fetch(`${API_URL}/trips/request`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                Accept: 'application/json',
-                Authorization: `Bearer ${token}`,
-              },
-              body: JSON.stringify({
-                pickup_label: origin.address,
-                dropoff_label: destination.address,
-                price,
-                pickup_lat: origin.lat,
-                pickup_lng: origin.lon,
-                dropoff_lat: destination.lat,
-                dropoff_lng: destination.lon,
-              }),
-            });
-            const json = await res.json().catch(() => null);
-            if (!res.ok || !json) {
-              const msg = (json && (json.message || json.error)) || 'Création de déplacement impossible.';
-              Alert.alert('Erreur', msg);
-              return;
-            }
-            const rideId = json?.id;
-            if (rideId) {
-              router.push({ pathname: '/screens/ride/SearchingDriver', params: { rideId: String(rideId) } });
-            }
-          } catch (e) {
-            console.log('Erreur création déplacement', e);
-          }
-        }}
+        style={[styles.confirmButton, quoting && { opacity: 0.6 }]}
+        disabled={quoting}
+        onPress={handleConfirm}
       >
         <Text style={styles.confirmButtonText}>
           {quoting ? 'Vérification...' : 'Confirmer le déplacement'}
@@ -254,10 +283,6 @@ export default function DeplacementSection() {
                 <Ionicons name="close" size={24} color={Colors.black} />
               </TouchableOpacity>
             </View>
-            <TouchableOpacity style={styles.myLocationBtn} onPress={handleUseMyLocation}>
-              <Ionicons name="locate" size={20} color={Colors.primary} />
-              <Text style={styles.myLocationText}>Ma position actuelle</Text>
-            </TouchableOpacity>
 
             {loadingData && (
               <ActivityIndicator color={Colors.primary} style={{ marginBottom: 20 }} />
@@ -284,9 +309,9 @@ export default function DeplacementSection() {
               }
             />
           </View>
-        </View>
-      </Modal>
-    </View>
+        </View >
+      </Modal >
+    </View >
   );
 }
 

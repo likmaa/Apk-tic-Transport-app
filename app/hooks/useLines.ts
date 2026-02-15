@@ -47,12 +47,13 @@ export function useLines() {
 
         if (stopsRes.ok) {
           const s = await stopsRes.json();
-          const stopsArray = Array.isArray(s) ? s : (s && Array.isArray(s.data) ? s.data : []);
+          const stopsArray = Array.isArray(s) ? s : (s && Array.isArray(s.stops) ? s.stops : (s && Array.isArray(s.data) ? s.data : []));
           setStops(stopsArray);
         }
+
         if (linesRes.ok) {
           const l = await linesRes.json();
-          const linesArray = Array.isArray(l) ? l : (l && Array.isArray(l.data) ? l.data : []);
+          const linesArray = Array.isArray(l) ? l : (l && Array.isArray(l.lines) ? l.lines : (l && Array.isArray(l.data) ? l.data : []));
           setLines(linesArray);
         }
       } catch (e) {

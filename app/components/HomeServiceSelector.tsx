@@ -12,7 +12,7 @@ type Props = {
 
 export default function HomeServiceSelector({ activeService, onChange }: Props) {
   const services: { id: ServiceType; label: string; icon: any }[] = [
-    { id: 'Course', label: 'Course', icon: 'car-side' },
+    { id: 'Course', label: 'Course', icon: 'car-sports' },
     { id: 'Déplacement', label: 'Déplacement', icon: 'walk' },
     { id: 'Livraison', label: 'Livraison', icon: 'package-variant-closed' },
   ];
