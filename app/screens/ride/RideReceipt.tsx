@@ -10,6 +10,7 @@ import { usePaymentStore } from '../../providers/PaymentProvider';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { fetchWithRetry } from '../../utils/networkHandler';
+import { useLocationStore } from '../../providers/LocationProvider';
 
 import { MapPlaceholder } from '../../components/MapPlaceholder';
 
@@ -31,6 +32,7 @@ type RootParams = {
 
 export default function RideReceipt() {
   const router = useRouter();
+  const { reset } = useLocationStore();
   const route = useRoute<RouteProp<RootParams, 'screens/ride/RideReceipt'>>();
   const rideId = route.params?.rideId;
   const amount = Number(route.params?.amount ?? 0);
@@ -142,6 +144,7 @@ export default function RideReceipt() {
 
   const handleSubmitRating = async () => {
     if (!rideId) {
+      reset();
       router.replace('/(tabs)');
       return;
     }
@@ -196,12 +199,13 @@ export default function RideReceipt() {
 
       if (res.ok) {
         Alert.alert('Merci !', 'Votre note a été enregistrée.', [
-          { text: 'OK', onPress: () => router.replace('/(tabs)') }
+          { text: 'OK', onPress: () => { reset(); router.replace('/(tabs)'); } }
         ]);
       } else {
         const errorData = await res.json().catch(() => ({}));
         // If rating already exists, still allow user to continue
         if (res.status === 409) {
+          reset();
           router.replace('/(tabs)');
         } else {
           console.warn('Rating error:', errorData);
@@ -210,7 +214,7 @@ export default function RideReceipt() {
             'Impossible d\'enregistrer votre note sur le serveur.',
             [
               { text: 'Réessayer', style: 'default' },
-              { text: 'Continuer sans noter', style: 'cancel', onPress: () => router.replace('/(tabs)') }
+              { text: 'Continuer sans noter', style: 'cancel', onPress: () => { reset(); router.replace('/(tabs)'); } }
             ]
           );
         }
