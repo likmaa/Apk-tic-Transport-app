@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useMemo, useState } from '
 // Optional persistence without hard dependency
 let AsyncStorage: any;
 try { AsyncStorage = require('@react-native-async-storage/async-storage').default; } catch { }
+import { logger } from '../../utils/logger';
 
 export type Place = {
   address: string;
@@ -89,9 +90,11 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
         // Détection automatique du simulateur (San Francisco par défaut)
         // On redirige automatiquement vers Cotonou pour faciliter le développement
         if (Math.abs(lat - 37.77) < 0.1 && Math.abs(lon + 122.41) < 0.1) {
-          console.log("📍 Simulateur détecté (SF), bascule automatique sur Cotonou.");
+          logger.info('📍 Simulateur détecté (SF) → Cotonou');
           lat = 6.3703;
           lon = 2.3912;
+        } else {
+          logger.info('📍 Position GPS obtenue', { lat: lat.toFixed(4), lon: lon.toFixed(4) });
         }
 
         // Validation de la zone de service
@@ -103,6 +106,7 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
             'Zone non couverte',
             SERVICE_AREA.OUT_OF_ZONE_MESSAGE
           );
+          logger.warn('Position hors zone de service', { lat, lon });
           return null;
         }
 

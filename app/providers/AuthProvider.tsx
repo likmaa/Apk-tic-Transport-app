@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter, useSegments } from 'expo-router';
+import { logger } from '../../utils/logger';
 
 type User = {
     id: number;
@@ -48,9 +49,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                     if (storedUser) {
                         setUser(JSON.parse(storedUser));
                     }
+                    logger.info('Session restaurée', { userId: storedUser ? JSON.parse(storedUser)?.id : null });
+                } else {
+                    logger.info('Aucune session sauvegardée');
                 }
             } catch (e) {
-                console.warn('Failed to load auth', e);
+                logger.error('Erreur chargement auth', { error: String(e) });
             } finally {
                 setIsLoading(false);
             }
@@ -79,6 +83,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const signIn = async (newToken: string, newUser: User) => {
         try {
+            logger.info('Connexion utilisateur', { userId: newUser.id, phone: newUser.phone });
             setToken(newToken);
             setUser(newUser);
             await AsyncStorage.setItem('authToken', newToken);
@@ -90,23 +95,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 const fcmToken = await registerForPushNotificationsAsync();
                 if (fcmToken) {
                     await registerTokenWithBackend(fcmToken, newToken);
+                    logger.info('Push notification enregistré');
                 }
             } catch (notifyErr) {
-                console.warn('Push registration failed (skip if dev environment)', notifyErr);
+                logger.warn('Push notification échoué', { error: String(notifyErr) });
             }
         } catch (e) {
-            console.error('Sign in error', e);
+            logger.error('Erreur connexion', { error: String(e) });
         }
     };
 
     const signOut = async () => {
         try {
+            logger.info('Déconnexion utilisateur');
             setToken(null);
             setUser(null);
             await AsyncStorage.removeItem('authToken');
             await AsyncStorage.removeItem('authUser');
         } catch (e) {
-            console.error('Sign out error', e);
+            logger.error('Erreur déconnexion', { error: String(e) });
         }
     };
 
