@@ -1,11 +1,11 @@
 import React from 'react';
-import { SafeAreaView, StyleSheet, Text, View, TouchableOpacity, Share, Image, Modal } from 'react-native';
-import { Colors } from '../../theme';
+import { SafeAreaView, StyleSheet, Text, View, TouchableOpacity, Share, Image, Modal, Platform, Linking, Alert } from 'react-native';
+import { Colors, Shadows } from '../../theme';
 import { Fonts } from '../../font';
-import { useNavigation, useRouter } from 'expo-router';
-import { useRoute, type RouteProp } from '@react-navigation/native';
+import { useNavigation, useRouter, useLocalSearchParams } from 'expo-router';
+import { type RouteProp } from '@react-navigation/native';
 import { MapPlaceholder } from '../../components/MapPlaceholder';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { useLocationStore } from '../../providers/LocationProvider';
 import { useServiceStore } from '../../providers/ServiceProvider';
 import { useAuth } from '../../providers/AuthProvider';
@@ -18,6 +18,7 @@ import {
   fetchWithRetry
 } from '../../utils/networkHandler';
 import { useSmoothMarker } from '../../hooks/useSmoothMarker';
+import { getImageUrl } from '../../utils/images';
 
 // Tentative d'importation sécurisée de Mapbox
 let Mapbox: any = null;
@@ -52,12 +53,13 @@ type RootParams = {
 export default function OngoingRide() {
   const router = useRouter();
   const navigation = useNavigation();
-  const route = useRoute<RouteProp<RootParams, 'screens/ride/OngoingRide'>>();
-  const vehicleName = route.params?.vehicleName || 'Standard';
-  const rideId = route.params?.rideId;
+  const params = useLocalSearchParams<{ vehicleName: string; rideId: string }>();
+  const vehicleName = params.vehicleName || 'Standard';
+  const rideId = params.rideId;
 
   const { serviceType, packageDetails } = useServiceStore();
   const { token, user } = useAuth();
+  const lastProcessedStatus = React.useRef<string | null>(null);
 
   const [eta, setEta] = React.useState<number | null>(null);
   const [center, setCenter] = React.useState<[number, number] | undefined>(undefined);
@@ -71,7 +73,26 @@ export default function OngoingRide() {
   const [lastUpdateAt, setLastUpdateAt] = React.useState<number>(Date.now());
   const [isPolling, setIsPolling] = React.useState(false);
 
-  const { lat: smoothLat, lng: smoothLng } = useSmoothMarker(driverPos);
+  const sanitizePhone = (phone?: string) => phone?.replace(/[^\d+]/g, '');
+
+  const handleCall = (phone?: string) => {
+    const sanitized = sanitizePhone(phone);
+    if (!sanitized) return;
+    Linking.openURL(`tel:${sanitized}`).catch(() =>
+      Alert.alert('Erreur', "Impossible d'ouvrir l'application Téléphone.")
+    );
+  };
+
+  const handleWhatsApp = (phone?: string) => {
+    const sanitized = sanitizePhone(phone);
+    if (!sanitized) return;
+    const digits = sanitized.replace(/[^\d]/g, '');
+    if (!digits.length) return;
+    const url = `https://wa.me/${digits}?text=${encodeURIComponent("Bonjour, je souhaite vous contacter pour ma course.")}`;
+    Linking.openURL(url).catch(() =>
+      Alert.alert('Erreur', "Impossible d'ouvrir WhatsApp.")
+    );
+  };
 
   const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
@@ -130,6 +151,9 @@ export default function OngoingRide() {
 
         channel.bind('ride.completed', (payload: any) => {
           if (cancelled) return;
+          if (lastProcessedStatus.current === 'completed') return;
+          lastProcessedStatus.current = 'completed';
+
           router.replace({
             pathname: '/screens/ride/RideReceipt',
             params: {
@@ -170,7 +194,7 @@ export default function OngoingRide() {
         unsubscribeChannel(channel);
       }
     };
-  }, [rideId, token, rideData, vehicleName, router]);
+  }, [rideId, token, vehicleName, router]);
 
   // Fallback Polling
   React.useEffect(() => {
@@ -194,6 +218,9 @@ export default function OngoingRide() {
 
             // Update ride data including potential status change
             if (data?.status === 'completed') {
+              if (lastProcessedStatus.current === 'completed') return;
+              lastProcessedStatus.current = 'completed';
+
               router.replace({
                 pathname: '/screens/ride/RideReceipt',
                 params: {
@@ -285,18 +312,18 @@ export default function OngoingRide() {
   // Recovery: if store is empty, but we have rideData, fill the local store
   React.useEffect(() => {
     if (rideData && (!origin || !destination)) {
-      if (rideData.pickup_lat && rideData.pickup_lng) {
+      if (rideData.pickup?.lat && rideData.pickup?.lng) {
         setStoreOrigin({
-          address: rideData.pickup_address,
-          lat: Number(rideData.pickup_lat),
-          lon: Number(rideData.pickup_lng),
+          address: rideData.pickup.address || 'Point de départ',
+          lat: Number(rideData.pickup.lat),
+          lon: Number(rideData.pickup.lng),
         });
       }
-      if (rideData.dropoff_lat && rideData.dropoff_lng) {
+      if (rideData.dropoff?.lat && rideData.dropoff?.lng) {
         setStoreDestination({
-          address: rideData.dropoff_address || 'Destination',
-          lat: Number(rideData.dropoff_lat),
-          lon: Number(rideData.dropoff_lng),
+          address: rideData.dropoff.address || 'Destination',
+          lat: Number(rideData.dropoff.lat),
+          lon: Number(rideData.dropoff.lng),
         });
       }
     }
@@ -369,6 +396,16 @@ export default function OngoingRide() {
     return () => clearInterval(interval);
   }, [stopStartedAt]);
 
+  const formatTime = (dateString?: string) => {
+    if (!dateString) return '';
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    } catch {
+      return '';
+    }
+  };
+
   const formatDuration = (seconds: number) => {
     const min = Math.floor(seconds / 60);
     const sec = seconds % 60;
@@ -405,7 +442,7 @@ export default function OngoingRide() {
             {origin && (
               <PointAnnotation id="origin" coordinate={[origin.lon, origin.lat]}>
                 <View style={styles.markerContainer}>
-                  <MaterialCommunityIcons name="crosshairs-gps" size={20} color={Colors.primary} />
+                  <Ionicons name="location" size={20} color={Colors.primary} />
                 </View>
               </PointAnnotation>
             )}
@@ -413,15 +450,18 @@ export default function OngoingRide() {
             {destination && (
               <PointAnnotation id="destination" coordinate={[destination.lon, destination.lat]}>
                 <View style={styles.markerContainer}>
-                  <MaterialCommunityIcons name="map-marker" size={24} color={'#f59e0b'} />
+                  <Ionicons name="flag" size={20} color={'#f59e0b'} />
                 </View>
               </PointAnnotation>
             )}
 
             {driverPos && (
-              <PointAnnotation id="driver" coordinate={[smoothLng.value, smoothLat.value]}>
+              <PointAnnotation
+                id="driver"
+                coordinate={[driverPos.longitude, driverPos.latitude]}
+              >
                 <View style={styles.markerContainer}>
-                  <MaterialCommunityIcons name="car" size={20} color={Colors.black} />
+                  <Ionicons name="car" size={22} color={Colors.black} />
                 </View>
               </PointAnnotation>
             )}
@@ -447,8 +487,11 @@ export default function OngoingRide() {
 
       {/* Overlay Header */}
       <View style={styles.topHeader}>
-        <Text style={styles.headerTitle}>En route !</Text>
-        <Text style={styles.headerSub}>Pour votre destination</Text>
+        <View style={styles.headerIndicator} />
+        <View>
+          <Text style={styles.headerTitle}>En route !</Text>
+          <Text style={styles.headerSub}>Destination : {destination?.address || '...'}</Text>
+        </View>
       </View>
 
       {/* Bottom sheet */}
@@ -457,39 +500,110 @@ export default function OngoingRide() {
 
         <View style={styles.etaRow}>
           <Text style={styles.sheetTitle}>Course en cours</Text>
-          <View style={styles.etaPill}>
-            <Text style={styles.etaPillText}>
-              {eta ? `Arrivée dans ${eta} min` : 'Calcul...'}
+          <View style={[styles.statusBadge_pill, { backgroundColor: '#E0F2FE' }]}>
+            <View style={[styles.pulseCircle_small, { backgroundColor: Colors.primary }]} />
+            <Text style={[styles.statusText_pill, { color: Colors.primary }]}>
+              {eta ? `${eta} min restants` : 'Calcul...'}
             </Text>
           </View>
         </View>
 
-        <View style={styles.driverCard}>
-          <Image source={require('../../../assets/images/LOGO_OR.png')} style={styles.avatar} />
-          <View style={{ flex: 1 }}>
-            <Text style={styles.driverName}>{rideData?.driver?.name || 'Chauffeur'}</Text>
-            <Text style={styles.driverSub}>{vehicleName} • {rideData?.driver?.vehicle_number || 'Vehicule'}</Text>
+        <View style={[styles.driverCard, Shadows.md]}>
+          <View style={styles.driverCore}>
+            <Image
+              source={rideData?.driver?.photo ? { uri: getImageUrl(rideData.driver.photo) } : require('../../../assets/images/LOGO_OR.png')}
+              style={styles.avatar}
+            />
+            <View style={{ flex: 1 }}>
+              <View style={styles.nameRow}>
+                <Text style={styles.driverName} numberOfLines={1}>
+                  {rideData?.driver?.name || 'Chauffeur'}
+                </Text>
+                <View style={styles.ratingBadge}>
+                  <Ionicons name="star" size={10} color="#F59E0B" />
+                  <Text style={styles.ratingText}>
+                    {rideData?.driver?.rating_average ? Number(rideData.driver.rating_average).toFixed(1) : '5.0'}
+                  </Text>
+                </View>
+              </View>
+              <Text style={styles.driverSub} numberOfLines={1}>
+                {rideData?.driver?.vehicle
+                  ? `${rideData.driver.vehicle.make} ${rideData.driver.vehicle.model} • `
+                  : `${vehicleName} • `}
+                <Text style={{ color: Colors.primary }}>
+                  {rideData?.driver?.vehicle?.license_plate || rideData?.driver?.vehicle_number || '---'}
+                </Text>
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={styles.moreBtn}
+              onPress={() => router.push({
+                pathname: '/screens/ride/ContactDriver',
+                params: {
+                  driverName: rideData?.driver?.name,
+                  vehicleName: rideData?.driver?.vehicle ? `${rideData.driver.vehicle.make} ${rideData.driver.vehicle.model}` : vehicleName,
+                  driverImage: rideData?.driver?.photo,
+                  vehiclePlate: rideData?.driver?.vehicle?.license_plate || rideData?.driver?.vehicle_number,
+                  driverPhone: rideData?.driver?.phone,
+                  pickupTime: rideData?.started_at,
+                  destination: destination?.address || rideData?.dropoff?.address
+                }
+              })}
+            >
+              <Ionicons name="ellipsis-vertical" size={20} color={Colors.gray} />
+            </TouchableOpacity>
           </View>
-          <TouchableOpacity
-            style={styles.iconBtn}
-            onPress={() => router.push({ pathname: '/screens/ride/ContactDriver', params: { driverName: rideData?.driver?.name, vehicleName } })}
-          >
-            <MaterialCommunityIcons name="message-text" size={20} color={Colors.black} />
-          </TouchableOpacity>
+
+          <View style={styles.cardDivider} />
+
+          <View style={styles.actionRow}>
+            <TouchableOpacity
+              style={[styles.contactActionBtn, styles.callAction]}
+              onPress={() => handleCall(rideData?.driver?.phone)}
+            >
+              <Ionicons name="call" size={18} color={Colors.primary} />
+              <Text style={styles.contactActionText}>Appeler</Text>
+            </TouchableOpacity>
+
+            <View style={styles.actionDivider} />
+
+            <TouchableOpacity
+              style={[styles.contactActionBtn, styles.waAction]}
+              onPress={() => handleWhatsApp(rideData?.driver?.phone)}
+            >
+              <Ionicons name="logo-whatsapp" size={18} color="#22C55E" />
+              <Text style={styles.contactActionText}>Message</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         <TouchableOpacity
-          style={styles.consumptionBtn}
+          style={[styles.consumptionBtn, Shadows.md]}
           onPress={() => router.push({ pathname: '/screens/ride/RideConsumption', params: { rideId: String(rideId) } })}
         >
-          <MaterialCommunityIcons name="chart-line" size={20} color={Colors.white} />
+          <View style={styles.consumptionIconCircle}>
+            <Ionicons name="speedometer-outline" size={20} color={Colors.white} />
+          </View>
           <Text style={styles.consumptionText}>Suivre la consommation (FCFA)</Text>
+          <Ionicons name="chevron-forward" size={18} color={Colors.white} style={{ opacity: 0.6 }} />
         </TouchableOpacity>
 
         <View style={styles.actions}>
           <TouchableOpacity
             style={styles.secondaryBtn}
-            onPress={() => Share.share({ message: `Je suis en route ! Suivez ma course TIC : ${rideId}` })}
+            onPress={() => {
+              const driverInfo = rideData?.driver ? `${rideData.driver.name} en ${rideData.driver.vehicle ? `${rideData.driver.vehicle.make} ${rideData.driver.vehicle.model}` : vehicleName} (${rideData.driver.vehicle?.license_plate || rideData?.driver?.vehicle_number || '---'})` : 'un chauffeur TIC';
+              const pickupT = formatTime(rideData?.started_at);
+              const dest = destination?.address || rideData?.dropoff?.address || 'Destination';
+
+              const shareMsg = `Je suis en route avec TIC ! 🚕\n\n` +
+                `👤 Chauffeur : ${driverInfo}\n` +
+                `📍 Destination : ${dest}\n` +
+                (pickupT ? `⏰ Prise en charge : ${pickupT}\n` : '') +
+                `🔗 ID Course : ${rideId}`;
+
+              Share.share({ message: shareMsg });
+            }}
           >
             <Text style={styles.secondaryText}>Partager le trajet</Text>
           </TouchableOpacity>
@@ -538,11 +652,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 5,
+    ...Shadows.md,
   },
   offlineText: {
     color: Colors.white,
@@ -561,11 +671,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 5,
+    ...Shadows.md,
   },
   liveBadge: { backgroundColor: 'rgba(34, 197, 94, 0.9)' },
   pollingBadge: { backgroundColor: 'rgba(245, 158, 11, 0.9)' },
@@ -583,68 +689,276 @@ const styles = StyleSheet.create({
   },
   liveCircle: { backgroundColor: '#bef264' },
   pollingCircle: { backgroundColor: '#fef3c7' },
-  topHeader: { position: 'absolute', top: 50, left: 20, right: 20, backgroundColor: 'rgba(255,255,255,0.9)', padding: 16, borderRadius: 16, borderLeftWidth: 4, borderLeftColor: Colors.primary },
-  headerTitle: { fontFamily: Fonts.titilliumWebBold, fontSize: 22, color: Colors.black },
-  headerSub: { fontFamily: Fonts.titilliumWeb, fontSize: 14, color: Colors.gray },
 
-  sheet: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: Colors.white, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20, paddingTop: 12, paddingBottom: 40, shadowColor: "#000", shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.1, shadowRadius: 8, elevation: 10 },
-  sheetHandle: { width: 40, height: 4, backgroundColor: Colors.lightGray, borderRadius: 2, alignSelf: 'center', marginBottom: 16 },
+  // Header styles
+  topHeader: {
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? 60 : 40,
+    left: 20,
+    right: 20,
+    backgroundColor: 'rgba(255,255,255,0.95)',
+    padding: 16,
+    borderRadius: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    ...Shadows.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.5)',
+  },
+  headerIndicator: {
+    width: 4,
+    height: 35,
+    backgroundColor: Colors.primary,
+    borderRadius: 2,
+  },
+  headerTitle: {
+    fontFamily: Fonts.titilliumWebBold,
+    fontSize: 18,
+    color: Colors.black,
+    lineHeight: 22,
+  },
+  headerSub: {
+    fontFamily: Fonts.titilliumWeb,
+    fontSize: 12,
+    color: Colors.gray,
+    marginTop: 2,
+  },
 
-  etaRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
-  sheetTitle: { fontFamily: Fonts.titilliumWebBold, fontSize: 18, color: Colors.black },
-  etaPill: { backgroundColor: 'rgba(74, 222, 128, 0.15)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8 },
-  etaPillText: { fontFamily: Fonts.titilliumWebBold, color: '#166534', fontSize: 13 },
+  // Bottom Sheet
+  sheet: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: Colors.white,
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
+    paddingHorizontal: 24,
+    paddingTop: 12,
+    paddingBottom: Platform.OS === 'ios' ? 40 : 30,
+    ...Shadows.lg,
+  },
+  sheetHandle: {
+    width: 40,
+    height: 5,
+    backgroundColor: '#E2E8F0',
+    borderRadius: 2.5,
+    alignSelf: 'center',
+    marginBottom: 20,
+  },
+  etaRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  sheetTitle: {
+    fontFamily: Fonts.titilliumWebBold,
+    fontSize: 20,
+    color: Colors.black,
+  },
+  statusBadge_pill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 20,
+    gap: 6,
+  },
+  pulseCircle_small: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  statusText_pill: {
+    fontFamily: Fonts.titilliumWebBold,
+    fontSize: 12,
+  },
 
-  driverCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.background, padding: 12, borderRadius: 16, gap: 12, marginBottom: 12 },
-  avatar: { width: 48, height: 48, borderRadius: 24, backgroundColor: Colors.lightGray },
-  driverName: { fontFamily: Fonts.titilliumWebBold, fontSize: 16, color: Colors.black },
-  driverSub: { fontFamily: Fonts.titilliumWeb, fontSize: 13, color: Colors.gray },
-  iconBtn: { padding: 10, backgroundColor: Colors.white, borderRadius: 12 },
+  // Driver Card
+  driverCard: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 20,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+    overflow: 'hidden',
+  },
+  driverCore: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+    gap: 14,
+  },
+  cardDivider: {
+    height: 1,
+    backgroundColor: '#F1F5F9',
+    marginHorizontal: 14,
+  },
+  actionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+  },
+  contactActionBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 4,
+  },
+  actionDivider: {
+    width: 1,
+    height: 20,
+    backgroundColor: '#F1F5F9',
+  },
+  contactActionText: {
+    fontFamily: Fonts.titilliumWebBold,
+    fontSize: 14,
+    color: Colors.black,
+  },
+  callAction: {
+    opacity: 1,
+  },
+  waAction: {
+    opacity: 1,
+  },
+  avatar: {
+    width: 54,
+    height: 54,
+    borderRadius: 18,
+    backgroundColor: '#E2E8F0',
+    borderWidth: 2,
+    borderColor: Colors.white,
+  },
+  moreBtn: {
+    padding: 8,
+    marginRight: -4,
+  },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 2,
+  },
+  driverName: {
+    fontFamily: Fonts.titilliumWebBold,
+    fontSize: 17,
+    color: Colors.black,
+    maxWidth: '70%',
+  },
+  ratingBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+    gap: 3,
+  },
+  ratingText: {
+    fontFamily: Fonts.titilliumWebBold,
+    fontSize: 10,
+    color: '#D97706',
+  },
+  driverSub: {
+    fontFamily: Fonts.titilliumWeb,
+    fontSize: 13,
+    color: Colors.gray,
+  },
+  contactActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  iconBtn: {
+    width: 44,
+    height: 44,
+    backgroundColor: Colors.white,
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
+    ...Shadows.sm,
+  },
 
-  consumptionBtn: { backgroundColor: Colors.primary, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, paddingVertical: 14, borderRadius: 12, marginBottom: 12 },
-  consumptionText: { fontFamily: Fonts.titilliumWebBold, color: Colors.white, fontSize: 16 },
+  // Consumption Button
+  consumptionBtn: {
+    backgroundColor: Colors.primary,
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderRadius: 20,
+    marginBottom: 16,
+    gap: 12,
+  },
+  consumptionIconCircle: {
+    width: 36,
+    height: 36,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  consumptionText: {
+    fontFamily: Fonts.titilliumWebBold,
+    color: Colors.white,
+    fontSize: 15,
+    flex: 1,
+  },
 
   actions: { flexDirection: 'row', gap: 10 },
-  secondaryBtn: { flex: 1, backgroundColor: Colors.white, paddingVertical: 12, alignItems: 'center', borderRadius: 12, borderWidth: 1, borderColor: Colors.lightGray },
-  secondaryText: { fontFamily: Fonts.titilliumWebBold, color: Colors.black, fontSize: 14 },
+  secondaryBtn: {
+    flex: 1,
+    backgroundColor: '#F1F5F9',
+    paddingVertical: 14,
+    alignItems: 'center',
+    borderRadius: 16,
+  },
+  secondaryText: {
+    fontFamily: Fonts.titilliumWebBold,
+    color: Colors.black,
+    fontSize: 14,
+  },
 
-  markerContainer: { padding: 4, backgroundColor: 'white', borderRadius: 20, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 3, elevation: 5 },
+  markerContainer: {
+    padding: 5,
+    backgroundColor: 'white',
+    borderRadius: 25,
+    ...Shadows.md,
+  },
 
   // Stop Modal Styles
   stopModalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: 'rgba(15, 23, 42, 0.75)',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
+    padding: 24,
   },
   stopModalContent: {
     backgroundColor: Colors.white,
-    borderRadius: 24,
-    padding: 24,
+    borderRadius: 32,
+    padding: 32,
     width: '100%',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.3,
-    shadowRadius: 20,
-    elevation: 10,
+    ...Shadows.lg,
   },
   stopModalHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 16,
-    gap: 10,
+    marginBottom: 20,
+    gap: 12,
   },
   stopIndicator: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: Colors.secondary,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: '#F59E0B',
   },
   stopModalTitle: {
     fontFamily: Fonts.titilliumWebBold,
-    fontSize: 22,
+    fontSize: 24,
     color: Colors.black,
   },
   stopModalSub: {
@@ -652,27 +966,28 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: Colors.gray,
     textAlign: 'center',
-    marginBottom: 24,
+    lineHeight: 24,
+    marginBottom: 32,
   },
   stopTimerContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.background,
-    paddingHorizontal: 20,
-    paddingVertical: 15,
-    borderRadius: 20,
-    gap: 12,
-    marginBottom: 24,
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 24,
+    paddingVertical: 20,
+    borderRadius: 24,
+    gap: 16,
+    marginBottom: 20,
   },
   stopTimerText: {
     fontFamily: Fonts.titilliumWebBold,
-    fontSize: 40,
-    color: Colors.secondary,
+    fontSize: 48,
+    color: '#D97706',
   },
   stopInfo: {
     fontFamily: Fonts.titilliumWeb,
     fontSize: 14,
-    color: Colors.mediumGray,
+    color: Colors.gray,
     textAlign: 'center',
     fontStyle: 'italic',
   },

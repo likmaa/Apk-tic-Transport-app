@@ -1,5 +1,5 @@
 import React, { useRef, useMemo, useState, useEffect, useCallback } from 'react';
-import { SafeAreaView, StyleSheet, Text, View, TouchableOpacity, ScrollView, Image, Alert, StatusBar } from 'react-native';
+import { SafeAreaView, StyleSheet, Text, View, TouchableOpacity, ScrollView, Image, Alert, StatusBar, Platform } from 'react-native';
 import { useNavigation, useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -158,7 +158,7 @@ export default function HomeTab() {
           vehicleName: activeRide.vehicle_type === 'vip' ? 'VIP' : 'Standard'
         }
       });
-    } else if (['accepted', 'arrived', 'started', 'ongoing'].includes(activeRide.status)) {
+    } else if (['accepted', 'arrived'].includes(activeRide.status)) {
       router.push({
         pathname: '/screens/ride/DriverTracking',
         params: {
@@ -167,7 +167,16 @@ export default function HomeTab() {
           driver: JSON.stringify(activeRide.driver)
         }
       });
-    } else if (activeRide.status === 'completed') {
+    } else if (['started', 'ongoing'].includes(activeRide.status)) {
+      router.push({
+        pathname: '/screens/ride/OngoingRide',
+        params: {
+          rideId: String(activeRide.id),
+          vehicleName: activeRide.vehicle_type === 'vip' ? 'VIP' : 'Standard'
+        }
+      });
+    }
+    else if (activeRide.status === 'completed') {
       // Mark this completed ride as dismissed so we don't loop
       dismissedCompletedRideRef.current = String(activeRide.id);
       router.push({
@@ -315,7 +324,7 @@ export default function HomeTab() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F8F9FD' },
-  scrollContent: { paddingHorizontal: 20, paddingTop: 24 },
+  scrollContent: { paddingHorizontal: 20, paddingTop: Platform.OS === 'ios' ? 45 : 30 },
 
   logoRow: { marginBottom: 12 },
   logo: { width: 80, height: 32 },

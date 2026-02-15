@@ -161,10 +161,10 @@ export default function RootLayout() {
                     <Stack.Screen name="screens/ride/RideSummary" options={{ headerShown: false }} />
                     <Stack.Screen name="screens/ride/SearchingDriver" options={{ headerShown: false }} />
                     <Stack.Screen name="screens/ride/OngoingRide" options={{ headerShown: false }} />
-                    <Stack.Screen name="screens/ride/RideConsumption" options={{ headerShown: true, title: "Suivi de consommation" }} />
+                    <Stack.Screen name="screens/ride/RideConsumption" options={{ headerShown: false, title: "Suivi de consommation" }} />
                     <Stack.Screen name="screens/ride/RideReceipt" options={{ headerShown: false }} />
                     <Stack.Screen name="screens/ride/History" options={{ headerShown: true, title: "Historique des courses" }} />
-                    <Stack.Screen name="screens/ride/ContactDriver" options={{ headerShown: true, title: "Contacter le chauffeur" }} />
+                    <Stack.Screen name="screens/ride/ContactDriver" options={{ headerShown: false }} />
                     <Stack.Screen name="screens/settings/DevPanel" options={{ headerShown: false }} />
                   </Stack>
                 </LocationProvider>

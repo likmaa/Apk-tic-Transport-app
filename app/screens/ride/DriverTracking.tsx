@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert, Linking, Image } from 'react-native';
-import { useNavigation, useRouter } from 'expo-router';
-import { useRoute, type RouteProp } from '@react-navigation/native';
+import { useNavigation, useRouter, useLocalSearchParams } from 'expo-router';
+import { type RouteProp } from '@react-navigation/native';
 import { MapPlaceholder } from '../../components/MapPlaceholder';
 
 // Tentative d'importation sécurisée de Mapbox
@@ -159,11 +159,18 @@ const timerStyles = StyleSheet.create({
 export default function DriverTracking() {
   const router = useRouter();
   const navigation = useNavigation();
-  const route = useRoute<RouteProp<RouteParams, 'screens/ride/DriverTracking'>>();
+  const params = useLocalSearchParams<{ vehicleName?: string; rideId?: string; driver?: string }>();
   const { origin, destination, setOrigin: setOriginStore, setDestination: setDestinationStore } = useLocationStore();
-  const vehicleNameParam = route.params?.vehicleName;
-  const rideId = route.params?.rideId;
-  const initialDriver = route.params?.driver;
+  const vehicleNameParam = params.vehicleName;
+  const rideId = params.rideId;
+  const initialDriver = React.useMemo(() => {
+    if (!params.driver) return null;
+    try {
+      return JSON.parse(params.driver);
+    } catch {
+      return null;
+    }
+  }, [params.driver]);
   const { method, paymentStatus } = usePaymentStore();
   const { token } = useAuth();
 
@@ -441,10 +448,10 @@ export default function DriverTracking() {
               }
 
               if (['ongoing', 'started'].includes(data.status)) {
-                navigation.navigate({
-                  name: 'screens/ride/OngoingRide',
+                router.replace({
+                  pathname: '/screens/ride/OngoingRide',
                   params: { vehicleName: vehicleNameParam || 'Véhicule', rideId: String(rideId) }
-                } as never);
+                });
                 return;
               }
 
@@ -534,10 +541,10 @@ export default function DriverTracking() {
           setRideStatus('ongoing');
           (window as any)._lastDriverLocationUpdate = Date.now();
           // Navigate to OngoingRide screen
-          navigation.navigate({
-            name: 'screens/ride/OngoingRide',
+          router.replace({
+            pathname: '/screens/ride/OngoingRide',
             params: { vehicleName: vehicleNameParam || 'Véhicule', rideId: String(rideId) }
-          } as never);
+          });
         });
 
         channel.bind('ride.completed', (payload: any) => {
@@ -651,9 +658,12 @@ export default function DriverTracking() {
           />
 
           {driverPos && (
-            <PointAnnotation id="driver" coordinate={[smoothLng.value, smoothLat.value]}>
+            <PointAnnotation
+              id="driver"
+              coordinate={[driverPos.longitude, driverPos.latitude]}
+            >
               <View style={styles.markerContainer}>
-                <Ionicons name="car" size={24} color={Colors.black} />
+                <Ionicons name="car" size={22} color={Colors.black} />
               </View>
             </PointAnnotation>
           )}
