@@ -35,6 +35,7 @@ import { useAuth } from '../../providers/AuthProvider';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { usePaymentStore } from '../../providers/PaymentProvider';
 import { haversineDistanceKm } from '../../utils/distance';
+import { getImageUrl } from '../../utils/images';
 import { getPusherClient, unsubscribeChannel } from '../../services/pusherClient';
 import {
   subscribeToNetworkChanges,
@@ -190,6 +191,7 @@ export default function DriverTracking() {
   const [driverPhone, setDriverPhone] = React.useState<string | undefined>(initialDriver?.phone);
   const [driverPhoto, setDriverPhoto] = React.useState<string | undefined>(initialDriver?.photo);
   const [vehicleInfo, setVehicleInfo] = React.useState<{ make?: string; model?: string; color?: string; license_plate?: string } | undefined>(initialDriver?.vehicle);
+  const [ratingAverage, setRatingAverage] = React.useState<number>(0);
   const [rideStatus, setRideStatus] = React.useState<string | undefined>(undefined);
   const [cancelling, setCancelling] = React.useState(false);
   const [isOnline, setIsOnline] = React.useState(true);
@@ -249,7 +251,16 @@ export default function DriverTracking() {
     if (!initialDriver) return;
     setDriverName(initialDriver.name);
     setDriverPhone(initialDriver.phone);
-  }, [initialDriver?.name, initialDriver?.phone]);
+    if (initialDriver.photo) {
+      setDriverPhoto(getImageUrl(initialDriver.photo) || undefined);
+    }
+    if (initialDriver.vehicle) {
+      setVehicleInfo(initialDriver.vehicle);
+    }
+    if ((initialDriver as any).rating_average) {
+      setRatingAverage((initialDriver as any).rating_average);
+    }
+  }, [initialDriver]);
 
   // Charger les infos de la course
   React.useEffect(() => {
@@ -292,9 +303,14 @@ export default function DriverTracking() {
         if (json?.driver) {
           setDriverName(json.driver.name);
           setDriverPhone(json.driver.phone);
-          setDriverPhoto(json.driver.photo);
+          if (json.driver.photo) {
+            setDriverPhoto(getImageUrl(json.driver.photo) || undefined);
+          }
           if (json.driver.vehicle) {
             setVehicleInfo(json.driver.vehicle);
+          }
+          if (json.driver.rating_average !== undefined) {
+            setRatingAverage(json.driver.rating_average);
           }
         }
         if (json?.status) {
@@ -685,7 +701,7 @@ export default function DriverTracking() {
             )}
             <View style={styles.ratingBadge}>
               <Ionicons name="star" size={10} color="#EAB308" />
-              <Text style={styles.ratingText}>4.9</Text>
+              <Text style={styles.ratingText}>{ratingAverage > 0 ? ratingAverage.toFixed(1) : 'New'}</Text>
             </View>
           </View>
 
