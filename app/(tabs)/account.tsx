@@ -8,7 +8,7 @@ import {
   TouchableOpacity,
   Image,
   Alert,
-  StatusBar
+  StatusBar,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -16,6 +16,7 @@ import { useRouter } from 'expo-router';
 import { Colors } from '../theme';
 import { Fonts } from '../font';
 import { getImageUrl } from '../utils/images';
+import { useRef } from 'react';
 
 interface UserInfo {
   name: string;
@@ -28,6 +29,15 @@ export default function AccountTab() {
   const router = useRouter();
   const [user, setUser] = useState<UserInfo | null>(null);
   const API_URL = process.env.EXPO_PUBLIC_API_URL;
+  const devTapCount = useRef(0);
+
+  const handleDevTrigger = () => {
+    devTapCount.current += 1;
+    if (devTapCount.current >= 5) {
+      devTapCount.current = 0;
+      router.push('/screens/settings/DevPanel' as any);
+    }
+  };
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -184,7 +194,9 @@ export default function AccountTab() {
           <Text style={styles.logoutText}>Déconnexion</Text>
         </TouchableOpacity>
 
-        <Text style={styles.versionText}>Version 1.2.0 • TIC Miton</Text>
+        <TouchableOpacity onPress={handleDevTrigger} activeOpacity={1}>
+          <Text style={styles.versionText}>Version 1.2.0 • TIC Miton</Text>
+        </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
   );
