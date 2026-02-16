@@ -403,7 +403,7 @@ export default function AccountScreen() {
                     activeOpacity={1}
                     style={{ marginVertical: 20, alignItems: 'center' }}
                 >
-                    <Text style={{ color: Colors.gray, fontSize: 12, opacity: 0.5 }}>TIC Miton Passager v1.0.2</Text>
+                    <Text style={{ color: Colors.gray, fontSize: 12, opacity: 0.5 }}>TIC Miton Passager v1.0.3</Text>
                 </TouchableOpacity>
 
                 {/* Add some bottom padding to the scroll view content */}

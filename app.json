@@ -2,7 +2,7 @@
   "expo": {
     "name": "TIC Miton",
     "slug": "transport",
-    "version": "1.0.2",
+    "version": "1.0.3",
     "orientation": "portrait",
     "icon": "./assets/images/play-store-icon.png",
     "scheme": "ticmiton",
@@ -27,7 +27,7 @@
       "bundleIdentifier": "com.ticmiton.passenger"
     },
     "android": {
-      "versionCode": 4,
+      "versionCode": 5,
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/play-store-icon.png"
