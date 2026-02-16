@@ -50,6 +50,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                         setUser(JSON.parse(storedUser));
                     }
                     logger.info('Session restaurée', { userId: storedUser ? JSON.parse(storedUser)?.id : null });
+
+                    // Auto re-register FCM token on app startup
+                    try {
+                        const { registerForPushNotificationsAsync, registerTokenWithBackend } = require('../utils/notificationHandler');
+                        const fcmToken = await registerForPushNotificationsAsync();
+                        if (fcmToken) {
+                            await registerTokenWithBackend(fcmToken, storedToken);
+                            logger.info('FCM token rafraîchi au démarrage');
+                        }
+                    } catch (notifyErr) {
+                        logger.warn('FCM auto-registration échouée (non-bloquant)', { error: String(notifyErr) });
+                    }
                 } else {
                     logger.info('Aucune session sauvegardée');
                 }
